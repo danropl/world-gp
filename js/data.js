@@ -3,29 +3,29 @@ var PG = (typeof window !== 'undefined' ? (window.PG = window.PG || {}) : (globa
 
 // Wersja gry: widoczna w menu; w multiplayer host przyjmuje tylko graczy z tą samą wersją. Zmieniaj przy każdej
 // aktualizacji razem z ?v= w znacznikach <script> w index.html (wtedy przeglądarka nie użyje starych plików z pamięci).
-PG.VERSION = '2026.10.18.11';
+PG.VERSION = '2026.10.18.13';
 
-// Tor Monza: oś toru odczytana z rzeczywistej geometrii (GeoJSON bacinger/f1-circuits, it-1922),
+// Tor Parco: fikcyjna nazwa; oś toru z geometrii GeoJSON (bacinger/f1-circuits, it-1922, licencja MIT, patrz THIRD_PARTY_NOTICES.md),
 // przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.
 PG.MONZA = {
   id: 'monza',
-  name: 'Autodromo Nazionale Monza',
+  name: 'Autodromo del Parco',
   info: '5,79 km · 11 zakrętów',
-  short: 'Monza',
+  short: 'Parco',
   country: 'IT',
   halfWidth: 6.5,
   points: [[0.0, -0.0], [36.5, -426.4], [53.1, -605.1], [54.9, -612.4], [60.0, -616.6], [66.4, -617.6], [74.3, -616.6], [81.7, -616.0], [88.5, -616.6], [93.2, -620.2], [96.9, -625.4], [97.8, -630.1], [97.8, -635.3], [71.9, -732.8], [68.3, -759.3], [66.9, -783.3], [68.7, -809.4], [78.4, -936.5], [82.1, -957.3], [86.7, -976.6], [93.7, -997.4], [102.9, -1019.8], [113.4, -1041.7], [129.1, -1066.3], [145.2, -1086.5], [166.9, -1109.5], [190.4, -1129.8], [216.7, -1148.5], [244.8, -1164.6], [276.6, -1180.3], [308.4, -1191.3], [343.4, -1201.1], [383.1, -1208.0], [423.6, -1211.6], [581.7, -1225.1], [775.2, -1236.6], [786.8, -1237.6], [792.8, -1240.8], [797.8, -1246.0], [804.2, -1268.4], [807.0, -1274.6], [811.6, -1278.8], [819.5, -1281.4], [845.7, -1286.1], [874.3, -1292.3], [914.8, -1305.4], [1095.9, -1365.8], [1111.6, -1369.5], [1126.4, -1369.5], [1140.6, -1366.8], [1150.8, -1362.7], [1160.5, -1357.0], [1169.7, -1350.7], [1181.2, -1338.2], [1187.7, -1328.4], [1192.3, -1316.3], [1194.6, -1302.8], [1202.4, -1217.4], [1217.2, -1071.5], [1216.7, -1058.4], [1214.4, -1050.0], [1210.7, -1042.7], [1204.7, -1037.5], [1193.7, -1030.2], [1075.2, -966.7], [978.9, -913.1], [919.0, -880.2], [889.9, -863.5], [857.2, -840.7], [833.7, -822.9], [813.5, -805.2], [708.4, -715.5], [633.8, -648.3], [476.1, -510.8], [381.2, -427.9], [368.3, -414.9], [363.2, -406.6], [362.3, -398.3], [362.3, -388.3], [365.5, -366.4], [366.5, -354.5], [366.5, -337.3], [365.1, -327.9], [361.3, -315.9], [355.8, -301.9], [346.6, -287.7], [334.2, -273.1], [319.9, -261.2], [308.4, -252.4], [302.4, -245.5], [297.8, -236.2], [293.6, -219.0], [284.0, -140.3], [273.8, -56.4], [195.5, 696.0], [192.2, 723.0], [189.0, 735.6], [182.6, 748.6], [173.8, 759.1], [163.7, 768.5], [149.4, 777.8], [133.8, 783.5], [115.8, 786.7], [100.5, 785.6], [86.3, 782.5], [69.7, 776.2], [53.6, 768.9], [41.6, 760.6], [27.3, 749.7], [11.1, 732.4], [0.1, 716.9], [-9.6, 700.2], [-17.9, 680.4], [-25.7, 658.5], [-31.7, 636.0], [-34.5, 616.8], [-37.7, 587.6], [-38.2, 558.4], [-38.6, 530.8], [-40.0, 476.1], [-41.0, 428.1], [-40.0, 376.1], [-34.0, 307.9], [-11.4, 92.1]],
   // nazwy zakrętów: indeks punktu, od którego zaczyna się dany fragment
   marks: [
-    { name: 'Variante del Rettifilo', p: 2, type: 'A' },
-    { name: 'Curva Biassono', p: 17, type: 'A' },
-    { name: 'Variante della Roggia', p: 35, type: 'A' },
-    { name: 'Curva di Lesmo 1', p: 46, type: 'A' },
-    { name: 'Curva di Lesmo 2', p: 58, type: 'A' },
-    { name: 'Rettifilo Serraglio', p: 63, type: 'S' },
-    { name: 'Variante Ascari', p: 74, type: 'A' },
+    { name: 'Prima Variante', p: 2, type: 'A' },
+    { name: 'Curva del Bosco', p: 17, type: 'A' },
+    { name: 'Seconda Variante', p: 35, type: 'A' },
+    { name: 'Curva del Parco 1', p: 46, type: 'A' },
+    { name: 'Curva del Parco 2', p: 58, type: 'A' },
+    { name: 'Rettifilo dei Pini', p: 63, type: 'S' },
+    { name: 'Variante del Lago', p: 74, type: 'A' },
     { name: 'Rettifilo Centrale', p: 91, type: 'S' },
-    { name: 'Curva Alboreto (Parabolica)', p: 94, type: 'A' },
+    { name: 'Curva Finale', p: 94, type: 'A' },
     { name: 'Rettifilo Tribune', p: 117, type: 'S' }
   ],
   // dodatkowe wygładzenie zgrubnych danych w zakrętach: [od punktu, do punktu, liczba przejść]
@@ -67,7 +67,7 @@ PG.NATIONS = {
 PG.ENGINES = {
   Ferro: { name: 'Ferro', power: 2 },
   Stella: { name: 'Stella', power: 2 },
-  Honta: { name: 'Honta', power: 1 },
+  Kaze: { name: 'Kaze', power: 1 },
   Renova: { name: 'Renova', power: -1 }
 };
 
@@ -92,88 +92,88 @@ PG.HELMET_PATTERNS = [
   { id: 'halves', name: 'Połówki' }
 ];
 
-// Zespoły inspirowane prawdziwą stawką (nazwy fikcyjne)
+// Zespoły i kierowcy fikcyjni (bez nazw, numerów i znaków prawdziwych zespołów i kierowców)
 PG.DEFAULT_TEAMS = [
   { id: 'rossa', name: 'Scuderia Rossa', short: 'ROS', country: 'IT', engine: 'Ferro', tier: 1,
     livery: { primary: '#d40f1a', secondary: '#1a1a1a', accent: '#ffd400', pattern: 'tail', paint: {} },
-    car: { power: 88, aero: 86, tyre: 84 }, budget: 92, inspiredBy: 'Ferrari',
+    car: { power: 88, aero: 86, tyre: 84 }, budget: 92,
     drivers: [
-      { first: 'Carlo', last: 'Benedetti', nat: 'IT', num: 16, pace: 92, start: 86, tyre: 84, wet: 88, helmet: { c1: '#d40f1a', c2: '#ffd400', pattern: 'band' } },
-      { first: 'Luis', last: 'Ortega', nat: 'ES', num: 55, pace: 89, start: 85, tyre: 90, wet: 84, helmet: { c1: '#1d3fa8', c2: '#ffffff', pattern: 'top' } }
+      { first: 'Carlo', last: 'Benedetti', nat: 'IT', num: 9, pace: 92, start: 86, tyre: 84, wet: 88, helmet: { c1: '#d40f1a', c2: '#ffd400', pattern: 'band' } },
+      { first: 'Luis', last: 'Ortega', nat: 'ES', num: 21, pace: 89, start: 85, tyre: 90, wet: 84, helmet: { c1: '#1d3fa8', c2: '#ffffff', pattern: 'top' } }
     ] },
   { id: 'argento', name: 'Stella Argento', short: 'STA', country: 'DE', engine: 'Stella', tier: 1,
     livery: { primary: '#b8bec4', secondary: '#141414', accent: '#00c2b2', pattern: 'fade', paint: {} },
-    car: { power: 87, aero: 85, tyre: 86 }, budget: 90, inspiredBy: 'Mercedes',
+    car: { power: 87, aero: 85, tyre: 86 }, budget: 90,
     drivers: [
-      { first: 'James', last: 'Whitfield', nat: 'GB', num: 63, pace: 90, start: 84, tyre: 86, wet: 87, helmet: { c1: '#ffffff', c2: '#00c2b2', pattern: 'halves' } },
-      { first: 'Andrea', last: 'Conti', nat: 'IT', num: 12, pace: 87, start: 88, tyre: 82, wet: 80, helmet: { c1: '#1a1a1a', c2: '#00c2b2', pattern: 'star' } }
+      { first: 'James', last: 'Whitfield', nat: 'GB', num: 15, pace: 90, start: 84, tyre: 86, wet: 87, helmet: { c1: '#ffffff', c2: '#00c2b2', pattern: 'halves' } },
+      { first: 'Andrea', last: 'Conti', nat: 'IT', num: 34, pace: 87, start: 88, tyre: 82, wet: 80, helmet: { c1: '#1a1a1a', c2: '#00c2b2', pattern: 'star' } }
     ] },
-  { id: 'bison', name: 'Bison Energy Racing', short: 'BIS', country: 'AT', engine: 'Honta', tier: 1,
-    livery: { primary: '#1c2a6b', secondary: '#d61f2c', accent: '#f6c400', pattern: 'chevron', paint: {} },
-    car: { power: 89, aero: 88, tyre: 83 }, budget: 91, inspiredBy: 'Red Bull',
+  { id: 'bison', name: 'Danube Racing', short: 'BIS', country: 'AT', engine: 'Kaze', tier: 1,
+    livery: { primary: '#1c2a6b', secondary: '#ff6a13', accent: '#e8e8e8', pattern: 'chevron', paint: {} },
+    car: { power: 89, aero: 88, tyre: 83 }, budget: 91,
     drivers: [
-      { first: 'Maarten', last: 'de Vries', nat: 'NL', num: 1, pace: 96, start: 90, tyre: 88, wet: 95, helmet: { c1: '#1c2a6b', c2: '#f6c400', pattern: 'top' } },
-      { first: 'Diego', last: 'Salazar', nat: 'MX', num: 11, pace: 84, start: 87, tyre: 89, wet: 80, helmet: { c1: '#006847', c2: '#ffffff', pattern: 'band' } }
+      { first: 'Maarten', last: 'Brouwer', nat: 'NL', num: 2, pace: 96, start: 90, tyre: 88, wet: 95, helmet: { c1: '#1c2a6b', c2: '#ff6a13', pattern: 'top' } },
+      { first: 'Diego', last: 'Salazar', nat: 'MX', num: 25, pace: 84, start: 87, tyre: 89, wet: 80, helmet: { c1: '#006847', c2: '#ffffff', pattern: 'band' } }
     ] },
-  { id: 'papaya', name: 'Papaya GP', short: 'PAP', country: 'GB', engine: 'Stella', tier: 1,
+  { id: 'papaya', name: 'Ember GP', short: 'EMB', country: 'GB', engine: 'Stella', tier: 1,
     livery: { primary: '#ff7a00', secondary: '#1b1b1b', accent: '#3fa9f5', pattern: 'split', paint: {} },
-    car: { power: 88, aero: 90, tyre: 87 }, budget: 89, inspiredBy: 'McLaren',
+    car: { power: 88, aero: 90, tyre: 87 }, budget: 89,
     drivers: [
-      { first: 'Liam', last: 'Norwood', nat: 'GB', num: 4, pace: 93, start: 84, tyre: 86, wet: 90, helmet: { c1: '#f6e200', c2: '#1b1b1b', pattern: 'halves' } },
-      { first: 'Callum', last: 'Reid', nat: 'AU', num: 81, pace: 92, start: 86, tyre: 89, wet: 85, helmet: { c1: '#ffffff', c2: '#ff7a00', pattern: 'top' } }
+      { first: 'Liam', last: 'Ashby', nat: 'GB', num: 29, pace: 93, start: 84, tyre: 86, wet: 90, helmet: { c1: '#f6e200', c2: '#1b1b1b', pattern: 'halves' } },
+      { first: 'Callum', last: 'Reid', nat: 'AU', num: 36, pace: 92, start: 86, tyre: 89, wet: 85, helmet: { c1: '#ffffff', c2: '#ff7a00', pattern: 'top' } }
     ] },
   { id: 'verde', name: 'Verde Britannia', short: 'VER', country: 'GB', engine: 'Stella', tier: 2,
     livery: { primary: '#005c4b', secondary: '#0d1f1a', accent: '#c8e000', pattern: 'twin', paint: {} },
-    car: { power: 85, aero: 80, tyre: 82 }, budget: 84, inspiredBy: 'Aston Martin',
+    car: { power: 85, aero: 80, tyre: 82 }, budget: 84,
     drivers: [
-      { first: 'Rafael', last: 'Montes', nat: 'ES', num: 14, pace: 89, start: 92, tyre: 92, wet: 90, helmet: { c1: '#005c4b', c2: '#c8e000', pattern: 'band' } },
-      { first: 'Ethan', last: 'Stroud', nat: 'CA', num: 18, pace: 79, start: 82, tyre: 80, wet: 78, helmet: { c1: '#ffffff', c2: '#d61f2c', pattern: 'star' } }
+      { first: 'Rafael', last: 'Montes', nat: 'ES', num: 39, pace: 89, start: 92, tyre: 92, wet: 90, helmet: { c1: '#005c4b', c2: '#c8e000', pattern: 'band' } },
+      { first: 'Ethan', last: 'Kerr', nat: 'CA', num: 42, pace: 79, start: 82, tyre: 80, wet: 78, helmet: { c1: '#ffffff', c2: '#d61f2c', pattern: 'star' } }
     ] },
   { id: 'alpes', name: 'Alpes Bleu', short: 'ALP', country: 'FR', engine: 'Renova', tier: 3,
     livery: { primary: '#0b62c9', secondary: '#0b1a33', accent: '#ff82bd', pattern: 'pods', paint: {} },
-    car: { power: 81, aero: 80, tyre: 81 }, budget: 76, inspiredBy: 'Alpine',
+    car: { power: 81, aero: 80, tyre: 81 }, budget: 76,
     drivers: [
-      { first: 'Pierre', last: 'Garnier', nat: 'FR', num: 10, pace: 84, start: 83, tyre: 82, wet: 88, helmet: { c1: '#0b62c9', c2: '#ffffff', pattern: 'halves' } },
-      { first: 'Julien', last: 'Moreau', nat: 'FR', num: 31, pace: 82, start: 80, tyre: 81, wet: 79, helmet: { c1: '#ff82bd', c2: '#0b1a33', pattern: 'top' } }
+      { first: 'Pierre', last: 'Garnier', nat: 'FR', num: 48, pace: 84, start: 83, tyre: 82, wet: 88, helmet: { c1: '#0b62c9', c2: '#ffffff', pattern: 'halves' } },
+      { first: 'Julien', last: 'Moreau', nat: 'FR', num: 52, pace: 82, start: 80, tyre: 81, wet: 79, helmet: { c1: '#ff82bd', c2: '#0b1a33', pattern: 'top' } }
     ] },
   { id: 'grove', name: 'Grove Racing', short: 'GRV', country: 'GB', engine: 'Stella', tier: 2,
     livery: { primary: '#0a2353', secondary: '#00a3e0', accent: '#ffffff', pattern: 'stripe', paint: {} },
-    car: { power: 86, aero: 81, tyre: 80 }, budget: 79, inspiredBy: 'Williams',
+    car: { power: 86, aero: 81, tyre: 80 }, budget: 79,
     drivers: [
-      { first: 'Kamil', last: 'Zieliński', nat: 'PL', num: 23, pace: 86, start: 84, tyre: 83, wet: 85, helmet: { c1: '#ffffff', c2: '#dc143c', pattern: 'halves' } },
-      { first: 'Mateo', last: 'Ruiz', nat: 'AR', num: 43, pace: 83, start: 85, tyre: 79, wet: 80, helmet: { c1: '#74acdf', c2: '#ffffff', pattern: 'band' } }
+      { first: 'Kamil', last: 'Zieliński', nat: 'PL', num: 26, pace: 86, start: 84, tyre: 83, wet: 85, helmet: { c1: '#ffffff', c2: '#dc143c', pattern: 'halves' } },
+      { first: 'Mateo', last: 'Ruiz', nat: 'AR', num: 57, pace: 83, start: 85, tyre: 79, wet: 80, helmet: { c1: '#74acdf', c2: '#ffffff', pattern: 'band' } }
     ] },
-  { id: 'faenza', name: 'Faenza Junior', short: 'FAE', country: 'IT', engine: 'Honta', tier: 2,
+  { id: 'faenza', name: 'Faenza Junior', short: 'FAE', country: 'IT', engine: 'Kaze', tier: 2,
     livery: { primary: '#f2f4f8', secondary: '#1634cb', accent: '#e4002b', pattern: 'chevron', paint: {} },
-    car: { power: 86, aero: 82, tyre: 81 }, budget: 80, inspiredBy: 'Racing Bulls',
+    car: { power: 86, aero: 82, tyre: 81 }, budget: 80,
     drivers: [
-      { first: 'Yuki', last: 'Tanabe', nat: 'JP', num: 22, pace: 85, start: 87, tyre: 80, wet: 82, helmet: { c1: '#ffffff', c2: '#bc002d', pattern: 'star' } },
-      { first: 'Hugo', last: 'Delacroix', nat: 'FR', num: 6, pace: 83, start: 81, tyre: 82, wet: 81, helmet: { c1: '#1634cb', c2: '#e4002b', pattern: 'top' } }
+      { first: 'Haruto', last: 'Tanabe', nat: 'JP', num: 61, pace: 85, start: 87, tyre: 80, wet: 82, helmet: { c1: '#ffffff', c2: '#bc002d', pattern: 'star' } },
+      { first: 'Hugo', last: 'Delacroix', nat: 'FR', num: 64, pace: 83, start: 81, tyre: 82, wet: 81, helmet: { c1: '#1634cb', c2: '#e4002b', pattern: 'top' } }
     ] },
   { id: 'hinwil', name: 'Hinwil Verde', short: 'HIN', country: 'CH', engine: 'Ferro', tier: 3,
     livery: { primary: '#1b1b1b', secondary: '#2a2a2a', accent: '#52e252', pattern: 'twin', paint: {} },
-    car: { power: 83, aero: 78, tyre: 80 }, budget: 72, inspiredBy: 'Sauber',
+    car: { power: 83, aero: 78, tyre: 80 }, budget: 72,
     drivers: [
-      { first: 'Niklas', last: 'Hoffmann', nat: 'DE', num: 27, pace: 85, start: 83, tyre: 84, wet: 83, helmet: { c1: '#ffce00', c2: '#111111', pattern: 'band' } },
-      { first: 'Gabriel', last: 'Souza', nat: 'BR', num: 5, pace: 82, start: 84, tyre: 79, wet: 84, helmet: { c1: '#009c3b', c2: '#ffdf00', pattern: 'halves' } }
+      { first: 'Niklas', last: 'Hoffmann', nat: 'DE', num: 68, pace: 85, start: 83, tyre: 84, wet: 83, helmet: { c1: '#ffce00', c2: '#111111', pattern: 'band' } },
+      { first: 'Gabriel', last: 'Souza', nat: 'BR', num: 72, pace: 82, start: 84, tyre: 79, wet: 84, helmet: { c1: '#009c3b', c2: '#ffdf00', pattern: 'halves' } }
     ] },
   { id: 'kanna', name: 'Kannapolis Racing', short: 'KAN', country: 'US', engine: 'Ferro', tier: 3,
     livery: { primary: '#f4f4f4', secondary: '#1b1b1b', accent: '#e6002b', pattern: 'split', paint: {} },
-    car: { power: 84, aero: 79, tyre: 79 }, budget: 74, inspiredBy: 'Haas',
+    car: { power: 84, aero: 79, tyre: 79 }, budget: 74,
     drivers: [
-      { first: 'Mikkel', last: 'Sørensen', nat: 'DK', num: 20, pace: 83, start: 80, tyre: 81, wet: 82, helmet: { c1: '#c8102e', c2: '#ffffff', pattern: 'top' } },
-      { first: 'Tomas', last: 'Novak', nat: 'CZ', num: 87, pace: 81, start: 83, tyre: 80, wet: 79, helmet: { c1: '#111111', c2: '#d7141a', pattern: 'star' } }
+      { first: 'Mikkel', last: 'Sørensen', nat: 'DK', num: 75, pace: 83, start: 80, tyre: 81, wet: 82, helmet: { c1: '#c8102e', c2: '#ffffff', pattern: 'top' } },
+      { first: 'Tomas', last: 'Novak', nat: 'CZ', num: 83, pace: 81, start: 83, tyre: 80, wet: 79, helmet: { c1: '#111111', c2: '#d7141a', pattern: 'star' } }
     ] }
 ];
 
-// Kalendarz sezonu — wszystkie rundy na Monzy w MVP, różna pogoda
+// Kalendarz sezonu — wszystkie rundy na torze Parco w MVP, różna pogoda
 PG.CALENDAR = [
   { name: 'Gran Premio d\'Apertura', weather: 'sun' },
   { name: 'Trofeo della Brianza', weather: 'cloud' },
   { name: 'Coppa del Parco', weather: 'rain' },
-  { name: 'Trofeo Lesmo', weather: 'sun' },
+  { name: 'Trofeo del Lago', weather: 'sun' },
   { name: 'Coppa Lombardia', weather: 'cloud' },
-  { name: 'Gran Premio d\'Italia', weather: 'sun' }
+  { name: 'Gran Premio del Parco', weather: 'sun' }
 ];
 
 PG.WEATHER = {

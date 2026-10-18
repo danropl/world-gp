@@ -1,0 +1,10 @@
+// Cloudflare Workers: gra to statyczne pliki (bez budowania), serwowane z katalogu głównego repozytorium.
+{
+  "name": "world-gp",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "."
+  },
+  // wymagane przez podglądy PR w Workers Builds (npx wrangler preview)
+  "previews": {}
+}

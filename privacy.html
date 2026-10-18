@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WORLD GP — polityka prywatności</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; background: #1a1916; color: #f2efe8; font: 17px/1.55 'Titillium Web', system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 30px; margin: 0 0 4px; }
+h2 { font-size: 20px; margin: 28px 0 8px; }
+p, li { color: #d8d3c9; }
+a { color: #ffc93c; }
+.muted { color: #b5b0a6; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Polityka prywatności</h1>
+<p class="muted">WORLD GP · obowiązuje od 19 października 2026</p>
+
+<h2>Kto odpowiada za dane</h2>
+<p>Administratorem danych jest autor gry WORLD GP: <strong>Łukasz Rozwarski</strong>, kontakt: <a href="mailto:rozwarskilukasz@gmail.com">rozwarskilukasz@gmail.com</a>.</p>
+
+<h2>Gra jednoosobowa</h2>
+<p>Gra nie wymaga konta i nie zbiera danych osobowych. Zapis gry (kariera, kreator, ustawienia, przypisania klawiszy) jest przechowywany wyłącznie w Twojej przeglądarce: w <code>localStorage</code> i w ciasteczkach zaczynających się od <code>wgp</code>. Przeglądarka dołącza te ciasteczka do zapytań o pliki gry, ale serwer ich nie zapisuje ani nie odczytuje. Nie służą do śledzenia, więc nie wymagają zgody. Możesz je usunąć, czyszcząc dane witryny w przeglądarce.</p>
+<p>Własne nagrania silników, które wczytasz z dysku, zostają tylko w Twojej przeglądarce (IndexedDB) i nigdzie nie są wysyłane. Fonty są wczytywane z tej samej strony, bez łączenia się z serwerami Google.</p>
+
+<h2>Multiplayer</h2>
+<p>Dopiero gdy otworzysz <strong>Multiplayer</strong>, gra łączy się z usługami zewnętrznymi:</p>
+<ul>
+<li><strong>Supabase</strong> (Supabase Inc., USA): lista lobby i nawiązywanie połączeń. Przetwarzane są: wpisana przez Ciebie nazwa gracza, losowy identyfikator sesji, kod lobby, wybór zespołu i kierowcy, stan wyścigu oraz Twój adres IP. Dane w kanałach nie są zapisywane w bazie i znikają po rozłączeniu.</li>
+<li><strong>WebRTC</strong>: podczas wyścigu przeglądarki graczy łączą się bezpośrednio, więc inni gracze w lobby mogą poznać Twój adres IP. Do ustalenia adresu używane są publiczne serwery STUN Google i Cloudflare.</li>
+</ul>
+<p>Podstawą przetwarzania jest wykonanie usługi, o którą prosisz, czyli rozgrywki online (art. 6 ust. 1 lit. b RODO). Supabase może przetwarzać dane poza Europejskim Obszarem Gospodarczym na podstawie standardowych klauzul umownych. Jeśli nie chcesz udostępniać tych danych, nie korzystaj z trybu multiplayer.</p>
+
+<h2>Hosting</h2>
+<p>Strona jest serwowana przez Cloudflare, który przy każdym wejściu technicznie przetwarza adres IP i podstawowe dane żądania w celu dostarczenia strony i ochrony przed nadużyciami.</p>
+
+<h2>Twoje prawa</h2>
+<p>Masz prawo dostępu do swoich danych, ich sprostowania, usunięcia, ograniczenia przetwarzania i sprzeciwu, a także prawo wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych (uodo.gov.pl). W sprawach danych napisz na adres podany wyżej.</p>
+
+<p><a href="./">← Wróć do gry</a></p>
+</main>
+</body>
+</html>

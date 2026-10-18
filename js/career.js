@@ -55,6 +55,8 @@
       if (!d || d.version !== 1) d = def;
       Object.keys(def).forEach(function (k) { if (d[k] === undefined) d[k] = def[k]; });
       Object.keys(def.settings).forEach(function (k) { if (d.settings[k] === undefined) d.settings[k] = def.settings[k]; });
+      // silnik Honta nazywa się teraz Kaze (starsze zapisy własnych zespołów)
+      (d.teams || []).forEach(function (t) { if (t && t.engine === 'Honta') t.engine = 'Kaze'; });
       Store.data = d;
       return d;
     },
@@ -105,7 +107,7 @@
       helmet: { c1: '#ffffff', c2: '#dc143c', pattern: 'halves' } };
   };
   PG.newTeam = function () {
-    return { id: uid('team'), name: 'Mój Zespół', short: 'MOJ', country: 'PL', engine: 'Honta', tier: 3,
+    return { id: uid('team'), name: 'Mój Zespół', short: 'MOJ', country: 'PL', engine: 'Kaze', tier: 3,
       livery: { primary: '#f2f2f2', secondary: '#dc143c', accent: '#1a1a1a', pattern: 'split', paint: {} },
       car: { power: 82, aero: 79, tyre: 80 }, budget: 70, driverIds: [] };
   };

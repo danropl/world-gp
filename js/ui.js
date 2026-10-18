@@ -177,7 +177,8 @@
         h('span', { class: 'n num', 'aria-hidden': 'true', text: (k < 9 ? '0' : '') + (k + 1) }), h('span', { class: 'tt', text: it[0] })));
     });
     w.appendChild(list);
-    w.appendChild(h('p', { class: 'muted menu-foot', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.' }));
+    w.appendChild(h('p', { class: 'muted menu-foot' }, 'Gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem. Zespoły, kierowcy i tor są fikcyjni. ',
+      h('a', { href: 'privacy.html', target: '_blank', rel: 'noopener', text: 'Prywatność' })));
     s.appendChild(w);
   };
   // Ikony (inline SVG, kolor z currentColor)
@@ -231,10 +232,10 @@
     var st = Store.data.settings;
     return seg(LINE_OPTS, G.lineMode ? G.lineMode() : (st.racingLine || 'full'), function (v) { st.racingLine = v; st.brakeHint = v !== 'off'; Store.save(); if (onPick) onPick(v); });
   }
-  // Dźwięk silników: klasyczny (dawny dźwięk gry) albo nagrania z paczki F1 25 wczytanej z dysku gracza
+  // Dźwięk silników: klasyczny (dawny dźwięk gry) albo własne nagrania wczytane z dysku gracza
   var ENG_TXT = {
     simple: 'Klasyczny: dawny dźwięk gry, tylko własnego bolidu.',
-    pack: 'Paczka F1 25: nagrania silników z paczki do gry F1 25 wczytanej z Twojego dysku. Każdy bolid brzmi jak silnik swojego producenta, słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera. Bez wczytanej paczki gra dźwięk klasyczny.'
+    pack: 'Własne nagrania: nagrania silników w formacie .bdl wczytane z Twojego dysku. Każdy bolid brzmi jak silnik swojego producenta, słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera. Bez wczytanej paczki gra dźwięk klasyczny.'
   };
   function enginePanel(st) {
     var EP = PG.EnginePack, box = h('div', { class: 'col', style: 'gap:8px' }), segBox = h('div'), engNote = note(''), packBox = h('div', { class: 'col', style: 'gap:6px' });
@@ -244,7 +245,7 @@
     var dirIn = h('input', { type: 'file', webkitdirectory: true, style: 'display:none', onchange: function () { pick(dirIn.files); dirIn.value = ''; } });
     var drawSeg = function () {
       segBox.innerHTML = '';
-      segBox.appendChild(seg([['simple', 'Klasyczny'], ['pack', 'Paczka F1 25']], mode(), function (v) {
+      segBox.appendChild(seg([['simple', 'Klasyczny'], ['pack', 'Własne nagrania']], mode(), function (v) {
         st.engineSound = v; Store.save(); engNote.textContent = ENG_TXT[v];
         if (v === 'pack' && EP && !EP.ready && !EP.busy) fileIn.click();
       }));
@@ -268,7 +269,7 @@
     var mb = function (b) { return (b / 1048576).toFixed(1).replace('.', ',') + ' MB'; };
     var draw = function () {
       packBox.innerHTML = '';
-      packBox.appendChild(h('h3', { text: 'Paczka dźwięków F1 25', style: 'margin-top:4px' }));
+      packBox.appendChild(h('h3', { text: 'Własne nagrania silników', style: 'margin-top:4px' }));
       if (!EP) { packBox.appendChild(note('Niedostępne w tej wersji gry.')); return; }
       var inf = EP.info;
       var status = EP.busy ? 'Instaluję… ' + Math.round(EP.progress * 100) + '%' : msg ? msg
@@ -297,10 +298,10 @@
       }
       packBox.appendChild(row);
       if (inf) {
-        var parts = Object.keys(EP.ENGINE_OF).map(function (e) { var k = EP.ENGINE_OF[e]; return e + ' → ' + EP.LABEL[k] + ' (' + (inf.names[inf.keys[k]] || '?').replace(/\.bdl$/i, '') + ')'; });
+        var parts = Object.keys(EP.ENGINE_OF).map(function (e) { var k = EP.ENGINE_OF[e]; return e + ' → ' + (inf.names[inf.keys[k]] || '?').replace(/\.bdl$/i, ''); });
         packBox.appendChild(note('Silniki zespołów: ' + parts.join(', ') + '.'));
       }
-      packBox.appendChild(note('Nagrania należą do EA/Codemasters i nie są częścią gry. Wskaż paczkę na swoim dysku (np. F1_25_Engine_Sound_Pack.zip) — wybrany zestaw zostaje tylko w tej przeglądarce i nigdzie nie jest wysyłany.'));
+      packBox.appendChild(note('Gra nie zawiera żadnych nagrań. Wczytaj tylko nagrania, do których masz prawa — wybrany zestaw zostaje tylko w tej przeglądarce i nigdzie nie jest wysyłany.'));
     };
     drawSeg(); draw();
     if (EP) { var off = EP.onChange(function () { if (packBox.isConnected) draw(); }); UI.onLeave(off); }
@@ -641,7 +642,7 @@
     function renderRight() {
       right.innerHTML = '';
       var t = teams.find(function (x) { return x.id === quick.teamId; });
-      right.appendChild(h('div', { class: 'teamhero', style: '--team:' + t.livery.primary + ';--team2:' + t.livery.secondary }, carImg(t.livery, t.drivers[quick.driverIdx] && t.drivers[quick.driverIdx].helmet, 5), h('div', { class: 'col', style: 'gap:2px' }, h('b', { style: 'font-size:22px', text: t.name }), h('span', { class: 'muted', text: 'Silnik ' + t.engine + (t.inspiredBy ? ' · inspiracja: ' + t.inspiredBy : '') }), h('span', { class: 'pill', style: 'align-self:flex-start', text: 'Osiągi ' + Math.round(PG.teamRating(t)) }))));
+      right.appendChild(h('div', { class: 'teamhero', style: '--team:' + t.livery.primary + ';--team2:' + t.livery.secondary }, carImg(t.livery, t.drivers[quick.driverIdx] && t.drivers[quick.driverIdx].helmet, 5), h('div', { class: 'col', style: 'gap:2px' }, h('b', { style: 'font-size:22px', text: t.name }), h('span', { class: 'muted', text: 'Silnik ' + t.engine }), h('span', { class: 'pill', style: 'align-self:flex-start', text: 'Osiągi ' + Math.round(PG.teamRating(t)) }))));
       right.appendChild(h('h3', { text: 'Ustawienia wyścigu' }));
       var opts = t.drivers.map(function (d, i) { return [i, '#' + d.num + ' ' + PG.driverName(d)]; });
       Store.data.drivers.forEach(function (d, i) { opts.push(['c' + i, '★ ' + PG.driverName(d)]); });

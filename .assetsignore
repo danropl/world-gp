@@ -1,0 +1,14 @@
+# pliki repozytorium, których nie publikujemy jako stronę
+.git
+.gitignore
+.gitattributes
+.assetsignore
+wrangler.jsonc
+.wrangler
+node_modules
+serve.py
+start.command
+start.bat
+*.bdl
+*.bank
+*.zip

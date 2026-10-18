@@ -136,8 +136,8 @@
     }
     function bbox(o) { var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; o.pts.forEach(function (p) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }); o.bb = [x0, y0, x1, y1]; }
     var ds = T.ds, m = function (v) { return Math.round(v / ds); };
-    var ret = PG.findMark(T, 'Variante del Rettifilo'), par = PG.findMark(T, 'Curva Alboreto (Parabolica)');
-    var asc = PG.findMark(T, 'Variante Ascari'), rog = PG.findMark(T, 'Variante della Roggia'), les1 = PG.findMark(T, 'Curva di Lesmo 1');
+    var ret = PG.findMark(T, 'Prima Variante'), par = PG.findMark(T, 'Curva Finale');
+    var asc = PG.findMark(T, 'Variante del Lago'), rog = PG.findMark(T, 'Seconda Variante'), les1 = PG.findMark(T, 'Curva del Parco 1');
     // aleja serwisowa po prawej stronie prostej startowej
     var p0 = T.pit ? T.pit.from : wrapI(T.mainFrom + m(40), N), p1 = T.pit ? T.pit.to : wrapI(ret - m(180), N);
     if (T.pit && T.pitA) {
@@ -169,7 +169,7 @@
     this.podium = rect(m(70), -hw + 1, hw + 30, 0, 14, 'podium');
     sc.pop();
     // stary owal: most nad prostą Serraglio
-    var ser = PG.findMark(T, 'Rettifilo Serraglio');
+    var ser = PG.findMark(T, 'Rettifilo dei Pini');
     this.bridgeI = wrapI(ser + m(330), N);
     var bi = this.bridgeI, ang = Math.atan2(T.ty[bi], T.tx[bi]) + 1.15;
     var bank = [];

@@ -1,0 +1,5 @@
+# nagrania silników i paczki dźwięków nie trafiają do repozytorium
+*.bdl
+*.bank
+*.zip
+.wrangler

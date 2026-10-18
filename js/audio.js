@@ -1,6 +1,6 @@
 // WORLD GP — dźwięk silnika i efekty (Web Audio).
 // Silnik „Klasyczny”: dwa oscylatory z filtrem, tylko bolid w kamerze (dawny dźwięk gry).
-// Silniki „Paczka F1 25”: nagrania silników z paczki wczytanej przez gracza (js/enginepack.js), odtwarzane
+// Silniki „Własne nagrania”: nagrania silników z paczki wczytanej przez gracza (js/enginepack.js), odtwarzane
 // w osobnym wątku audio (js/engines.js): bolid w kamerze i najbliżsi rywale, każdy z nagraniem silnika swojego
 // producenta, z odległością, kierunkiem i efektem Dopplera. Bez wczytanej paczki gra dźwięk klasyczny.
 (function (PG) {
@@ -10,7 +10,7 @@
   function fin(x, d) { return (typeof x === 'number' && isFinite(x)) ? x : d; }
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
 
-  // ---------- silniki z nagrań (paczka F1 25) ----------
+  // ---------- silniki z nagrań (własne nagrania gracza) ----------
   var EV = A.ev = {
     ready: false, node: null, eng: null, sp: null, bus: null, buf: null, slots: [], idle: true, tmp: null,
     banks: null, bankMap: null, bankSent: null,
@@ -68,7 +68,7 @@
     EV.bankMap = EV.banks ? map || {} : null;
     evSendBanks();
   };
-  // Czy grają nagrania z paczki (ustawienie „Paczka F1 25” i nagrania już w wątku dźwięku)
+  // Czy grają nagrania z paczki (ustawienie „Własne nagrania” i nagrania już w wątku dźwięku)
   A.packActive = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     return !!(EV.ready && st && st.engineSound === 'pack' && EV.banks && EV.bankSent === EV.banks);
@@ -239,7 +239,7 @@
   A.setOn = function (on) { A.on = on; if (A.master) A.master.gain.value = on ? A.vol : 0; };
   A.setVol = function (v) { A.vol = v; if (A.master && A.on) A.master.gain.value = v; };
 
-  // Dźwięk bolidu w kamerze (car) i — z paczką F1 25 — rywali w pobliżu (S: sesja, V: widok 3D z kamerą)
+  // Dźwięk bolidu w kamerze (car) i — z własnymi nagraniami — rywali w pobliżu (S: sesja, V: widok 3D z kamerą)
   A.engine = function (car, active, others, S, V) {
     if (!A.ctx) return;
     var t = A.ctx.currentTime;
