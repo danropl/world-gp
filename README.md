@@ -6,7 +6,7 @@ WORLD GP to gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem.
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
-Pełna dokumentacja ze zrzutami ekranu: [docs/WORLD-GP-dokumentacja.pdf](docs/WORLD-GP-dokumentacja.pdf). Prezentacja: [docs/WORLD-GP-prezentacja.pptx](docs/WORLD-GP-prezentacja.pptx). Jak działa AI bolidów: [docs/WORLD-GP-AI-bolidow.md](docs/WORLD-GP-AI-bolidow.md).
+Jak działa AI bolidów: [docs/WORLD-GP-AI-bolidow.md](docs/WORLD-GP-AI-bolidow.md). Polityka prywatności (multiplayer): [privacy.html](privacy.html).
 
 ## Uruchomienie
 

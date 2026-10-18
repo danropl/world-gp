@@ -177,7 +177,8 @@
         h('span', { class: 'n num', 'aria-hidden': 'true', text: (k < 9 ? '0' : '') + (k + 1) }), h('span', { class: 'tt', text: it[0] })));
     });
     w.appendChild(list);
-    w.appendChild(h('p', { class: 'muted menu-foot', text: 'Gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem. Zespoły, kierowcy i tor są fikcyjni.' }));
+    w.appendChild(h('p', { class: 'muted menu-foot' }, 'Gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem. Zespoły, kierowcy i tor są fikcyjni. ',
+      h('a', { href: 'privacy.html', target: '_blank', rel: 'noopener', text: 'Prywatność' })));
     s.appendChild(w);
   };
   // Ikony (inline SVG, kolor z currentColor)
