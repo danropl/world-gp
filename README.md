@@ -10,13 +10,13 @@ Pełna dokumentacja ze zrzutami ekranu: [docs/WORLD-GP-dokumentacja.pdf](docs/WO
 
 Gra działa wyłącznie w 3D i wymaga przeglądarki z WebGL (aktualny Chrome, Edge, Firefox lub Safari z włączonym przyspieszeniem sprzętowym).
 
-Gra jest na gałęzi `claude/f1-game-github-export-1jz93w`. Gałąź `main` (domyślna na GitHubie) jej nie zawiera, dlatego klonuj z `-b`:
+Sklonuj repozytorium:
 
 ```bash
-git clone -b claude/f1-game-github-export-1jz93w https://github.com/danropl/padok-f1.git
+git clone https://github.com/danropl/world-gp.git
 ```
 
-Potem uruchamiaj grę skryptem z katalogu `game`. Skrypt najpierw pobiera najnowszą wersję (`git pull`), a potem otwiera grę w przeglądarce:
+Potem uruchamiaj grę skryptem z katalogu `world-gp`. Skrypt najpierw pobiera najnowszą wersję (`git pull`), a potem otwiera grę w przeglądarce:
 
 - **macOS:** dwuklik `start.command` w Finderze albo w Terminalu `./start.command`
 - **Windows:** dwuklik `start.bat`

@@ -6,7 +6,7 @@ AI bolidów w WORLD GP nie uczy się ani nie przeszukuje drzewa decyzji. Każdy 
 
 AI steruje bolidem tymi samymi wejściami co gracz (`steer`, `throttle`, `brake`, `drsOpen`), a ruch liczy ta sama fizyka (`PG.stepCar`). Nie ma teleportacji ani „gumki” (rubber banding).
 
-Dokumentacja opisuje wersję gry 2026.10.15.1 na gałęzi `claude/f1-game-github-export-1jz93w` repozytorium [danropl/padok-f1](https://github.com/danropl/padok-f1/tree/claude/f1-game-github-export-1jz93w).
+Dokumentacja opisuje wersję gry 2026.10.15.1 w repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).
 
 | Plik | Rola w AI |
 | --- | --- |
