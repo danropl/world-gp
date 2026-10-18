@@ -97,9 +97,9 @@
     T.straights = marks.filter(function (m) { return m.type === 'S'; }).map(function (m) { return { name: m.name, i: Math.round(m.s / ds) % N }; });
     buildRunoff(T);
     T.grid = gridSlots(T, 24);
-    T.sectors = [findMark(T, 'Curva di Lesmo 1') - Math.round(120 / ds), findMark(T, 'Variante Ascari') + Math.round(250 / ds)];
-    var parab = findMark(T, 'Curva Alboreto (Parabolica)'), back = findMark(T, 'Rettifilo Centrale'), ret = findMark(T, 'Variante del Rettifilo');
-    var asc = findMark(T, 'Variante Ascari');
+    T.sectors = [findMark(T, 'Curva del Parco 1') - Math.round(120 / ds), findMark(T, 'Variante del Lago') + Math.round(250 / ds)];
+    var parab = findMark(T, 'Curva Finale'), back = findMark(T, 'Rettifilo Centrale'), ret = findMark(T, 'Prima Variante');
+    var asc = findMark(T, 'Variante del Lago');
     var straightF = findMark(T, 'Rettifilo Tribune');
     T.drs = [
       { from: wrapI(straightF + Math.round(30 / ds), N), to: wrapI(ret - Math.round(100 / ds), N), detect: wrapI(parab - Math.round(30 / ds), N) },
@@ -110,7 +110,7 @@
     T.mainTo = wrapI(ret - Math.round(140 / ds), N);
     for (var mi = T.mainFrom; mi !== T.mainTo; mi = wrapI(mi + 1, N)) { T.barR[mi] = Math.min(T.barR[mi], T.hw + 3); T.barL[mi] = Math.min(T.barL[mi], T.hw + 6); }
     // aleja serwisowa po prawej stronie prostej startowej (pas hw+4,2 … hw+13 za murem, garaże dalej):
-    // zjazd za Parabolicą, ograniczenie 80 km/h tylko przy garażach, wyjazd przed Rettifilo
+    // zjazd za Curva Finale, ograniczenie 80 km/h tylko przy garażach, wyjazd przed Rettifilo
     var pitFrom = wrapI(T.mainFrom + Math.round(40 / ds), N), pitTo = wrapI(ret - Math.round(180 / ds), N), gar0 = wrapI(-Math.round(260 / ds), N);
     T.pit = {
       entry: wrapI(pitFrom - Math.round(150 / ds), N), from: pitFrom, to: pitTo, exit: wrapI(pitTo + Math.round(110 / ds), N),
@@ -168,10 +168,10 @@
         else { T.surfR[i4] = 1; T.barR[i4] = Math.max(T.barR[i4], depth + 6); }
       }
     }
-    // Parabolica i Rettifilo: asfaltowe pobocza (jak dziś na Monzy)
-    var par = findMark(T, 'Curva Alboreto (Parabolica)');
+    // Curva Finale i Prima Variante: asfaltowe pobocza
+    var par = findMark(T, 'Curva Finale');
     for (var p = par - Math.round(80 / T.ds); p < par + Math.round(420 / T.ds); p++) { var q = wrapI(p, N); if (T.surfL[q] === 1) T.surfL[q] = 2; T.barL[q] = Math.max(T.barL[q], 44); }
-    var ret = findMark(T, 'Variante del Rettifilo');
+    var ret = findMark(T, 'Prima Variante');
     for (var r = ret - Math.round(150 / T.ds); r < ret + Math.round(60 / T.ds); r++) { var q2 = wrapI(r, N); T.surfL[q2] = 2; T.surfR[q2] = 2; T.barL[q2] = Math.max(T.barL[q2], 38); T.barR[q2] = Math.max(T.barR[q2], 30); }
     // prosta startowa: wąskie pobocza i ściana boksów po prawej
     var startF = findMark(T, 'Rettifilo Tribune');

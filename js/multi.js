@@ -755,7 +755,7 @@
         var full = l.n >= l.max, open = l.st === 'lobby';
         list.appendChild(h('div', { class: 'card', style: 'cursor:default' },
           h('div', { class: 'row', style: 'justify-content:space-between;flex-wrap:nowrap' }, h('b', { text: String(l.name || l.code) }), h('span', { class: 'pill ' + (open ? 'green' : 'amber'), text: open ? 'w lobby' : 'trwa wyścig' })),
-          h('span', { class: 'muted', style: 'font-size:14px', text: 'Host: ' + l.host + ' · ' + l.n + '/' + l.max + ' graczy · ' + (PG.trackDef ? PG.trackDef(l.tr).short : 'Monza') + ' · ' + l.laps + ' okr. · ' + (WNAME[l.w] || '') + ' · ' + (QNAME[l.q] || '') }),
+          h('span', { class: 'muted', style: 'font-size:14px', text: 'Host: ' + l.host + ' · ' + l.n + '/' + l.max + ' graczy · ' + (PG.trackDef ? PG.trackDef(l.tr).short : 'Parco') + ' · ' + l.laps + ' okr. · ' + (WNAME[l.w] || '') + ' · ' + (QNAME[l.q] || '') }),
           h('div', { class: 'row' }, h('span', { class: 'pill', text: 'Kod: ' + l.code }), h('button', { type: 'button', class: 'small primary', text: 'Dołącz', disabled: !open || full, onclick: function () { joinCode(l.code); } }))));
       });
     }

@@ -1,6 +1,8 @@
 # WORLD GP
 
-Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo nagrania z paczki do F1 25, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
+Gra wyścigowa w przeglądarce w stylu bolidów z otwartymi kołami: fikcyjny tor Parco oparty na prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo własne nagrania gracza, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły, kierowcy, silniki i tor są fikcyjni.
+
+WORLD GP to gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem. Licencje bibliotek, danych toru i fontów: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
@@ -61,10 +63,10 @@ W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który
 
 ## Weekend wyścigowy
 
-- **Dystans:** od 1 do 53 okrążeń (pełny dystans Grand Prix Monzy). Zużycie opon „Auto" przyspiesza degradację w krótszych wyścigach, by strategia miała znaczenie.
+- **Dystans:** od 1 do 53 okrążeń (pełny dystans Grand Prix na tym torze). Zużycie opon „Auto" przyspiesza degradację w krótszych wyścigach, by strategia miała znaczenie.
 - **Kwalifikacje Q1 · Q2 · Q3:** po Q1 odpada pięciu najwolniejszych, po Q2 kolejnych pięciu, Q3 ustala pierwszą dziesiątkę. Każdy segment można przejechać albo zasymulować. Do wyboru też jedno okrążenie.
 - **Pit stopy:** `B` (pad: `L1` albo `Create`) zgłasza zjazd, `1`–`4` (pad: krzyżak ▲▼) wybiera opony. Przejazd aleją prowadzi gra (80 km/h przy garażach), na stanowisku wymiana opon i naprawa skrzydeł. AI ma własną strategię. Na suchym torze od 10 okrążeń obowiązują dwie różne mieszanki (inaczej +30 s).
-- **Zjazd bez zgłoszenia:** możesz też po prostu skręcić w drogę zjazdu za Parabolicą, zanim zacznie się mur alei. Mechanicy nie czekają wtedy z oponami, więc postój trwa o ok. 7–9 s dłużej.
+- **Zjazd bez zgłoszenia:** możesz też po prostu skręcić w drogę zjazdu za Curva Finale, zanim zacznie się mur alei. Mechanicy nie czekają wtedy z oponami, więc postój trwa o ok. 7–9 s dłużej.
 - **Samochód bezpieczeństwa i VSC:** po wypadkach, awariach AI i przy odłamkach. Pod SC kolejka bez wyprzedzania i restart na linii mety, pod VSC limit prędkości. DRS wraca dwa okrążenia po restarcie. Częstość awarii: wyłączone / rzadko / często.
 
 ## Multiplayer
@@ -88,25 +90,25 @@ Działają w Chrome i Edge (WebHID), gdy gra jest otwarta z `localhost` albo `ht
 **Ustawienia → Dźwięk → Silniki:**
 
 - **Klasyczny** (domyślnie, gdy nie ma paczki): dawny dźwięk gry — dwa oscylatory z filtrem, wysokość z obrotów, barwa z gazu. Słychać tylko własny bolid.
-- **Paczka F1 25**: nagrania silników z paczki do gry F1 25 wczytanej z dysku gracza (niżej). Słychać własny bolid i do 4 najbliższych rywali, każdy z silnikiem swojego producenta, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej). Bez wczytanej paczki gra dźwięk klasyczny.
+- **Własne nagrania**: nagrania silników w formacie `.bdl` wczytane z dysku gracza (niżej). Słychać własny bolid i do 4 najbliższych rywali, każdy z silnikiem swojego producenta, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej). Bez wczytanych nagrań gra dźwięk klasyczny.
 
 Obroty: do 19 000 obr./min. Przełożenia są stałe, więc na każdym biegu obroty rosną liniowo z prędkością, a po zmianie w górę spadają o ok. 15–20%; skrzynia automatyczna zmienia bieg przy ok. 18 400. Diody na kierownicy i pasek obrotów zapalają się od ok. 15 000 obr./min.
 
-## Dźwięki silników z paczki do F1 25 (opcjonalnie)
+## Własne nagrania silników (opcjonalnie)
 
-Gra potrafi grać prawdziwe nagrania silników z paczki dźwięków do gry F1 25 (pliki `.bdl`, np. `F1_25_Engine_Sound_Pack.zip`). **Nagrania należą do EA/Codemasters i nie ma ich w repozytorium** — każdy gracz wczytuje paczkę ze swojego dysku, a wybrany zestaw zostaje tylko w jego przeglądarce (IndexedDB). Nic nie jest nigdzie wysyłane, a `.gitignore` blokuje dodanie plików `.bdl` i paczki do gita.
+Gra potrafi odtwarzać nagrania przemiatania obrotów silnika w formacie `.bdl`. **Gra nie zawiera żadnych nagrań** — każdy gracz wczytuje ze swojego dysku nagrania, do których ma prawa, a wybrany zestaw zostaje tylko w jego przeglądarce (IndexedDB). Nic nie jest nigdzie wysyłane, a `.gitignore` blokuje dodanie plików `.bdl` do gita.
 
 1. **Ustawienia → Dźwięk → Wczytaj paczkę (ZIP lub .bdl)…** i wskaż plik ZIP (albo **Rozpakowany folder…**, albo same pliki `.bdl`).
-2. Gra pokaże zestawy z paczki (F1 2019, F1 2020, F1 22, F1 23, F1 24, F1 25 dla bolidów 2026, V8, V10, V12). Domyślnie wybiera **F1 24 Engine Sounds** — kliknij **Zainstaluj zestaw**. Zmiana zestawu: wybierz inny i zainstaluj go ponownie (bez ponownego wskazywania pliku, dopóki strona jest otwarta).
-3. Silniki: **Paczka F1 25** włącza się sama. Po ponownym uruchomieniu gry paczka wczytuje się z przeglądarki (ok. 16–20 MB na zestaw). **Usuń paczkę** kasuje nagrania z przeglądarki.
+2. Jeśli w plikach jest kilka zestawów, wybierz jeden i kliknij **Zainstaluj zestaw**.
+3. Silniki: **Własne nagrania** włączają się same. Po ponownym uruchomieniu gry nagrania wczytują się z przeglądarki. **Usuń paczkę** kasuje je z przeglądarki.
 
-Każdy bolid brzmi jak silnik swojego producenta: Ferro → Ferrari, Stella → Mercedes, Honta → Honda, Renova → Renault (pliki `*_2025.bdl`; w zestawie dla bolidów 2026 Honda i Renault z najbliższych odpowiedników). Słychać też przerwę zapłonu przy zmianie biegu, przegazówkę przy redukcji, ogranicznik w alei, strzały z wydechu po odpuszczeniu gazu i wypadanie zapłonów przy uszkodzonym silniku; na polach startowych przy zapalonych światłach rywale trzymają obroty. Kto nie ma paczki (np. drugi gracz w multiplayerze), słyszy dźwięk klasyczny.
+Każdy producent silnika w grze (Ferro, Stella, Kaze, Renova) dostaje nagranie z pliku o odpowiadającej nazwie. Słychać też przerwę zapłonu przy zmianie biegu, przegazówkę przy redukcji, ogranicznik w alei, strzały z wydechu po odpuszczeniu gazu i wypadanie zapłonów przy uszkodzonym silniku; na polach startowych przy zapalonych światłach rywale trzymają obroty. Kto nie wczytał nagrań (np. drugi gracz w multiplayerze), słyszy dźwięk klasyczny.
 
-**Maksymalne obroty brzmią jak maksymalne obroty nagrania:** jałowe (4500) to jałowe z nagrania, zmiana biegu skrzyni automatycznej (ok. 18 400) to sam koniec przemiatania na gazie, a od 18 800 (diody ogranicznika) i na ograniczniku (np. przy prędkości maksymalnej z DRS na 8. biegu) gra nagranie silnika na ograniczniku z końca przemiatania, jak w F1 25. Na gazie głośność rośnie z obrotami aż do maksimum — w niektórych nagraniach silnik przy samym ograniczniku cichnie, w grze nie. Z kamery za bolidem własny silnik gra ze stałą głośnością i bez efektu Dopplera (kamera przy dużej prędkości zostaje w tyle, ale silnik nie cichnie).
+**Maksymalne obroty brzmią jak maksymalne obroty nagrania:** jałowe (4500) to jałowe z nagrania, zmiana biegu skrzyni automatycznej (ok. 18 400) to sam koniec przemiatania na gazie, a od 18 800 (diody ogranicznika) i na ograniczniku (np. przy prędkości maksymalnej z DRS na 8. biegu) gra nagranie silnika na ograniczniku z końca przemiatania. Na gazie głośność rośnie z obrotami aż do maksimum — w niektórych nagraniach silnik przy samym ograniczniku cichnie, w grze nie. Z kamery za bolidem własny silnik gra ze stałą głośnością i bez efektu Dopplera (kamera przy dużej prędkości zostaje w tyle, ale silnik nie cichnie).
 
-Jak to działa: plik `.bdl` to pakiet nagrań z silnika gry (EGO). Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Na ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania (punkty pętli dobrane tak, by jej koniec gładko przechodził w początek). Gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku. Odtwarzanie działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`; z innego adresu ten sam kod liczy się w wątku głównym.
+Jak to działa: plik `.bdl` to pakiet nagrań silnika. Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Na ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania (punkty pętli dobrane tak, by jej koniec gładko przechodził w początek). Gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku. Odtwarzanie działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`; z innego adresu ten sam kod liczy się w wątku głównym.
 
-Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Firefox 113+; w starszych rozpakuj paczkę i wskaż folder.
+Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Firefox 113+; w starszych rozpakuj ZIP i wskaż folder.
 
 ## Grafika 3D
 
@@ -114,13 +116,13 @@ Las złożony z czterech gatunków: szerokie drzewa liściaste (lipa, dąb), li�
 
 Trawa 3D na poboczach wokół kamery, asfalt z kruszywem i smugami gumy w strefach hamowania, żwir z otoczaków.
 
-W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie F1: kierownicę z dużym wyświetlaczem (bieg, prędkość, czasy, DRS, ERS, opony), rzędem diod obrotów, diodami flag (żółte przy neutralizacji, niebieskie przy DRS), kolorowymi przyciskami (N, +10, BW, PC, +1, PL, OK, BB±), jasnoniebieskimi rolkami pod kciukami i trzema pokrętłami z kolorowymi skalami, gumowe uchwyty i łopatki; dłonie w rękawicach skręcające razem z kierownicą i ręce w kombinezonie zespołu (łokcie zginają się przy skręcie); wannę kokpitu z panelami z wytłoczeniami, jasnoszarą poduszkę przed kolanami, przezroczystą owiewkę z zębami na przedniej krawędzi, panel przełączników i naklejki ostrzegawcze.
+W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie z otwartymi kołami: kierownicę z dużym wyświetlaczem (bieg, prędkość, czasy, DRS, ERS, opony), rzędem diod obrotów, diodami flag (żółte przy neutralizacji, niebieskie przy DRS), kolorowymi przyciskami (N, +10, BW, PC, +1, PL, OK, BB±), jasnoniebieskimi rolkami pod kciukami i trzema pokrętłami z kolorowymi skalami, gumowe uchwyty i łopatki; dłonie w rękawicach skręcające razem z kierownicą i ręce w kombinezonie zespołu (łokcie zginają się przy skręcie); wannę kokpitu z panelami z wytłoczeniami, jasnoszarą poduszkę przed kolanami, przezroczystą owiewkę z zębami na przedniej krawędzi, panel przełączników i naklejki ostrzegawcze.
 
 ## Pliki
 
 | Plik | Zawartość |
 | --- | --- |
-| `js/data.js` | zespoły, kierowcy, tor Monza, kalendarz, opony, pogoda |
+| `js/data.js` | zespoły, kierowcy, tor Parco, kalendarz, opony, pogoda |
 | `js/track.js` | geometria toru |
 | `js/physics.js` | model jazdy bolidu |
 | `js/session.js` | kwalifikacje i wyścig, przeciwnicy |
@@ -135,8 +137,8 @@ W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie F
 | `js/trees3d.js` | drzewa 3D: atlas liści i kory, gatunki, daleki LOD, materiał z kołysaniem na wietrze |
 | `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, diody, dłonie i ręce, wanna, poduszka, owiewka) |
 | `js/audio.js` | dźwięk: silnik klasyczny, silniki z paczki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
-| `js/engines.js` | odtwarzanie nagrań silników z paczki F1 25 (synteza ziarnista w AudioWorklecie, zapasowo w wątku głównym) |
-| `js/enginepack.js` | wczytywanie paczki dźwięków F1 25 z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |
+| `js/engines.js` | odtwarzanie własnych nagrań silników (synteza ziarnista w AudioWorklecie, zapasowo w wątku głównym) |
+| `js/enginepack.js` | wczytywanie własnych nagrań silników z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |
 | `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/keys.js` | przypisanie klawiszy (zapis w ciasteczku `wgp_keys`) |
 | `js/game.js` | pętla gry |

@@ -1,6 +1,6 @@
-// WORLD GP — dźwięki silników z paczki do gry F1 25 (pliki .bdl), wczytywane z dysku gracza.
+// WORLD GP — własne nagrania silników gracza (pliki .bdl), wczytywane z jego dysku.
 //
-// Gra nie zawiera tych nagrań (należą do EA/Codemasters). Gracz wskazuje paczkę na swoim dysku
+// Gra nie zawiera żadnych nagrań. Gracz wskazuje nagrania, do których ma prawa, na swoim dysku
 // (Ustawienia → Dźwięk: plik ZIP, pliki .bdl albo rozpakowany folder), a wybrany zestaw zostaje tylko
 // w jego przeglądarce (IndexedDB). Nic nie jest nigdzie wysyłane.
 //
@@ -14,10 +14,10 @@
   'use strict';
   var EP = PG.EnginePack = { ready: false, info: null, banks: [], map: {}, sets: null, source: '', busy: false, progress: 0, error: '' };
 
-  // Producenci w grze → nagrania w paczce (pliki z F1 25: *_2025 dla bolidów 2025, *_2026 dla 2026)
+  // Producenci w grze → nazwy plików w paczce (*_2025, *_2026 to warianty tego samego producenta)
   var KEYS = ['ferrari', 'mercedes', 'honda', 'renault'];
   var LABEL = { ferrari: 'Ferrari', mercedes: 'Mercedes', honda: 'Honda', renault: 'Renault' };
-  var ENGINE_OF = { Ferro: 'ferrari', Stella: 'mercedes', Honta: 'honda', Renova: 'renault' };
+  var ENGINE_OF = { Ferro: 'ferrari', Stella: 'mercedes', Kaze: 'honda', Renova: 'renault' };
   var PREF = {
     ferrari: ['ferrari_2025', 'ferrari_2026', 'ferrari'],
     mercedes: ['mercedes_2025', 'mercedes_2026', 'mercedes'],
@@ -285,7 +285,7 @@
     });
   }
   function baseName(p) { var s = p.replace(/\\/g, '/').split('/'); return s[s.length - 1]; }
-  // Zestawy: folder nad „F1 25/audio/…” (tak jest w paczce); luźne pliki to jeden zestaw
+  // Zestawy: folder nad „<nazwa>/audio/…” albo folder z plikami; luźne pliki to jeden zestaw
   function groupSets(entries) {
     var sets = [], by = {};
     entries.forEach(function (en) {
@@ -301,7 +301,7 @@
     sets.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
     return sets;
   }
-  // Domyślny zestaw: bolidy 2024 (F1 24), potem F1 25, potem pierwszy
+  // Domyślny zestaw: wg nazwy folderu, potem pierwszy
   EP.defaultSet = function (sets) {
     var tests = [/f1 ?24/i, /f1 ?25/i, /f1 ?23/i];
     for (var t = 0; t < tests.length; t++) for (var i = 0; i < sets.length; i++) if (tests[t].test(sets[i].name)) return sets[i];

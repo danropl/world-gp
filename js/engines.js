@@ -1,4 +1,4 @@
-// WORLD GP — dźwięk silników z nagrań paczki do F1 25 (synteza ziarnista w osobnym wątku audio).
+// WORLD GP — dźwięk silników z własnych nagrań gracza (synteza ziarnista w osobnym wątku audio).
 //
 // Każdy głos (bolid w kamerze i najbliżsi rywale) gra nagrania silnika swojego producenta przygotowane przez
 // enginepack.js. Bank: { idle, rtop, top, cyl, mics: [{ on, off, g, go }, …] }. Warstwa to jedno nagranie
