@@ -135,7 +135,7 @@ immutable
 set search_path = ''
 as $$
   select nullif(left(btrim(regexp_replace(normalize(coalesce(p, ''), nfc),
-    '[[:cntrl:]­​-‏ -‮⁠-⁯﻿]', '', 'g')), max_len), '');
+    '[[:cntrl:]\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]', '', 'g')), max_len), '');
 $$;
 
 -- ustawienia lobby widoczne na liście: tylko znane klucze, krótkie wartości
