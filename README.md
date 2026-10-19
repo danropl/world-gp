@@ -73,7 +73,8 @@ W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który
 
 **Menu → Multiplayer.** Jedna osoba tworzy lobby (publiczne albo prywatne), pozostali dołączają z listy albo kodem. Każdy wybiera zespół i kierowcę (także z kreatora), host ustawia dystans, pogodę, kwalifikacje, AI, SC, zużycie opon i uszkodzenia. Potem kwalifikacje online, wybór opon na start i wyścig.
 
-- Lista lobby i łączenie graczy działają przez Supabase Realtime (projekt z `.env.example`), sam wyścig — bezpośrednio między przeglądarkami (WebRTC). Gdy połączenie bezpośrednie się nie uda, dane idą przez serwer rzadziej. Darmowy plan Supabase ma limit ok. 100 wiadomości na sekundę na projekt.
+- Lobby żyją w bazie Supabase (anonimowa sesja gracza, funkcje `lobby_*`, migracja w `supabase/migrations/`), sygnalizacja idzie prywatnymi kanałami Realtime dostępnymi tylko dla członków lobby. Sam wyścig idzie WebRTC przez serwer TURN Cloudflare (`/api/turn` w `worker/index.js`, sekrety `TURN_KEY_ID` i `TURN_KEY_API_TOKEN`), więc gracze nie widzą swoich adresów IP. Bez TURN dane idą przez Supabase, rzadziej. Darmowy plan Supabase ma limit ok. 100 wiadomości na sekundę na projekt.
+- Wymagane ustawienia Supabase: włączone anonimowe logowanie (Authentication → Sign In / Providers) i wyłączony publiczny dostęp do kanałów (Realtime → Settings → Allow public access).
 - Host prowadzi AI i dyrekcję wyścigu: nie przełączaj karty, gdy jesteś hostem (przeglądarka wstrzymuje wtedy grę).
 - Wyścig online nie zatrzymuje się na pauzie. Gracz, który się rozłączy, oddaje bolid AI.
 - Test na jednym komputerze: dodaj `?mp=local` do adresu i otwórz grę w dwóch kartach.
