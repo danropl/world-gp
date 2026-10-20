@@ -164,8 +164,8 @@
 
   // Klatka: bolid w kamerze (głos 0) i najbliżsi rywale (głosy 1..)
   var near = [];
-  function evFrame(car, S, V) {
-    var L = evListener(V, car), now = L.t, P = EV.P, nv = EV.slots.length, k, i;
+  function evFrame(car, S, V, L) {
+    var now = L.t, P = EV.P, nv = EV.slots.length, k, i;
     evVoice(0, car, L, S, true, now);
     // najbliżsi rywale; przydział do głosów stały, póki bolid jest w zasięgu
     near.length = 0;
@@ -247,12 +247,16 @@
       A.eng.gain.setTargetAtTime(0, t, 0.08); A.skidG.gain.setTargetAtTime(0, t, 0.05); A.crowdG.gain.setTargetAtTime(0, t, 0.2);
       if (A.sqG) { A.sqG.gain.setTargetAtTime(0, t, 0.05); A.sqOG.gain.setTargetAtTime(0, t, 0.05); }
       evOff();
+      if (PG.SCSound) PG.SCSound.off();
       return;
     }
     var rpm = fin(car.rpm, 4500), thr = fin(car.throttle, 0), av = Math.abs(fin(car.v, 0));
+    var L = evListener(V, car);
+    // samochód bezpieczeństwa (wbudowany dźwięk albo bank wczytany przez gracza)
+    if (PG.SCSound) { try { PG.SCSound.frame(S, L); } catch (e) { if (!A.scErr) { A.scErr = true; console.warn('Dźwięk SC:', e); } } }
     if (A.packActive() && A.on) {
       A.eng.gain.setTargetAtTime(0, t, 0.05);
-      evFrame(car, S, V);
+      evFrame(car, S, V, L);
     } else {
       evOff();
       // silnik klasyczny (obroty przeliczone na dawną skalę wysokości dźwięku: 19 000 → 12 500)
