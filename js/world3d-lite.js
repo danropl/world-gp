@@ -1,6 +1,7 @@
 // WORLD GP — świat 3D toru: niebo, światło i cienie (mapa cieni przy bolidzie + wypalone cienie dalekie),
 // asfalt z gumą, krawężniki, pobocza, bariery z reklamami, ściany opon, siatki, trybuny z kibicami, boksy, padok,
-// las (instancje), stary owal z mostem, podium, tablice hamowania i DRS, posterunki porządkowych, światła startu.
+// las (instancje), stary owal z mostem, podium, tablice hamowania i DRS, posterunki porządkowych, światła startu,
+// otoczenie wg rodzaju toru (SCENERY: park z miastem, lotnisko z hangarami i wsiami, pustynia z wydmami, ulice).
 // API: scene, sun, sunDir, setFocus(x, z), setWeather(env), setStartLights(n), update(dt, camera), dispose().
 (function (PG) {
   'use strict';
@@ -203,6 +204,24 @@
     }
     return canvasOf(S, C, 3);
   }
+  // piasek pustyni (kafel 10 m): zmarszczki nawiane wiatrem, plamy jaśniejszego i rdzawego piasku, drobne kamyki;
+  // packed — ubity piasek przy torze (słabsze zmarszczki, więcej kamyków)
+  function texSand(S, packed) {
+    var n = S * S, C = new Float32Array(n * 3), x, y;
+    for (y = 0; y < S; y++) for (x = 0; x < S; x++) {
+      var i = (y * S + x) * 3, wv = vnoise(x / (S / 4), y / (S / 4), 4, 81) * PI2;
+      var rip = Math.sin((9 * x + 6 * y) / S * PI2 + wv), n1 = vnoise(x / (S / 8), y / (S / 8), 8, 82), n2 = vnoise(x / (S / 32), y / (S / 32), 32, 83);
+      var rust = clamp(vnoise(x / (S / 4), y / (S / 4), 4, 84) * 1.5 - 0.5, 0, 1);
+      var v = 0.92 + n1 * 0.05 + n2 * 0.05 + rip * (packed ? 0.01 : 0.025) + (hash2(x + 17, y) - 0.5) * 0.1;
+      C[i] = (0.7 + rust * 0.02) * v; C[i + 1] = (0.6 - rust * 0.03) * v; C[i + 2] = (0.45 - rust * 0.04) * v;
+    }
+    var R = rng(packed ? 86 : 85), cnt = n / (packed ? 260 : 700);
+    for (var k = 0; k < cnt; k++) {
+      var j = (((R() * S) | 0) * S + ((R() * S) | 0)) * 3, l = 0.5 + R() * 0.35;
+      C[j] *= l; C[j + 1] *= l; C[j + 2] *= l;
+    }
+    return canvasOf(S, C, 3);
+  }
   // żwir (kafel 2,5 m): zaokrąglone otoczaki 8–22 mm w kilku odcieniach, ciemne szczeliny między nimi, normalne
   function texGravel(S) {
     var n = S * S, H = new Float32Array(n), C = new Float32Array(n * 3), i;
@@ -358,6 +377,23 @@
     for (var x2 = 256; x2 < 512; x2 += 32) g.fillRect(x2, 0, 2, 256);
     g.fillRect(256, 127, 256, 2);
     for (var k2 = 0; k2 < 600; k2++) { g.fillStyle = 'rgba(0,0,0,0.04)'; g.fillRect(256 + R() * 254, R() * 254, 2, 2); }
+    return c;
+  }
+  // ściana budynku z oknem (kafel 3,6 m = jedno piętro i jedno okno); jasny tynk barwiony kolorem wierzchołków
+  function texWindows() {
+    var c = makeCanvas(128, 128), R = rng(17);
+    var g = fillPixels(c, function (x, y, o) {
+      var n = (hash2(x + 5, y + 9) - 0.5) * 10 + (vnoise(x / 16, y / 16, 8, 91) - 0.5) * 10;
+      o[0] = 236 + n; o[1] = 233 + n; o[2] = 226 + n;
+    });
+    var gr = g.createLinearGradient(0, 30, 0, 98); gr.addColorStop(0, '#5d6f80'); gr.addColorStop(1, '#27313b');
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(28, 26, 72, 4);
+    g.fillStyle = gr; g.fillRect(30, 30, 68, 68);
+    g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(30, 30, 30, 68);
+    g.fillStyle = '#d8d6d0'; g.fillRect(62, 30, 4, 68); g.fillRect(30, 30, 68, 3);
+    g.fillStyle = '#c4c1ba'; g.fillRect(26, 98, 76, 6);
+    g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(0, 124, 128, 4);
+    for (var k = 0; k < 300; k++) { g.fillStyle = 'rgba(60,50,40,0.05)'; g.fillRect(R() * 126, R() * 126, 2, 2); }
     return c;
   }
   // fikcyjni sponsorzy: [nazwa, tło, tekst, akcent]
@@ -625,7 +661,31 @@
       cloud: [0.98, 0.5, 1.0], disk: 0, haze: 0.16, fogN: 30, fogF: 850, exp: 1.28, wet: true, envI: 0.55, shStr: 0.4
     }
   };
-  var ENV_MATS = ['grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeDet', 'treeFar', 'grassTuft', 'rubber'];
+  // Otoczenie toru (def.scenery w js/data.js): podłoże, trawa 3D, zabudowa i ozdoby.
+  // town: zabudowa w pasie od near do far metrów od toru (count — ile budynków najwyżej, h — wysokości, pal — tynki,
+  // roof — dachy; pitched — udział dachów dwuspadowych, cluster — jak bardzo zabudowa skupia się w osiedla)
+  var SCENERY = {
+    park: {
+      ground: 'grass', tufts: true,
+      town: { near: 330, far: 1700, count: 650, h: [9, 30], pal: [0xe6cfa4, 0xdcae80, 0xcf8a62, 0xf0e4c6, 0xe9d6a6, 0xc7b292, 0xd9c2b0], roof: [0xa75b3c, 0x9a5236, 0xb46a46], pitched: 0.45, cluster: 0.45 }
+    },
+    airfield: {
+      ground: 'fields', tufts: true, hangars: true,
+      town: { near: 300, far: 1600, count: 260, h: [5, 8], pal: [0xa65a42, 0x9b5240, 0xe8dfca, 0xb7674c, 0xd8cdb4], roof: [0x3f434a, 0x4a4540, 0x5a3a30], pitched: 1, cluster: 0.62 }
+    },
+    desert: {
+      ground: 'sand', tufts: false, dunes: true, rocks: true, masts: true, tower: true,
+      town: { near: 160, far: 700, count: 70, h: [4, 11], pal: [0xe2cfa8, 0xd8c09a, 0xeadcc0, 0xcdb48c], roof: [0xd9c7a2], pitched: 0, cluster: 0.55 },
+      // poprawki nieba i światła odbitego od ziemi (mnożniki koloru horyzontu i ziemi w niebie, światło od piasku)
+      hor: [1.08, 1.0, 0.88], gnd: [1.6, 1.35, 1.0], hemiG: [0.62, 0.5, 0.34]
+    },
+    // tor uliczny: gęste kamienice tuż za barierami
+    city: {
+      ground: 'grass', tufts: false,
+      town: { near: 0, far: 900, count: 1400, h: [14, 60], pal: [0xd9d4ca, 0xc9c0b0, 0xb8b4ad, 0xe4dccb, 0xa9a39a], roof: [0x8c8e92], pitched: 0, cluster: 0.1 }
+    }
+  };
+  var ENV_MATS = ['bldg', 'rock', 'grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeDet', 'treeFar', 'grassTuft', 'rubber'];
 
   // ---------- wsadowe budowanie geometrii (jedna siatka na materiał i komórkę świata) ----------
   var _m3 = new THREE.Matrix3(), _bv = new THREE.Vector3();
@@ -702,6 +762,7 @@
     this.fwd = new THREE.Vector3();
     this._v = new THREE.Vector3();
     var hw = T.hw, N = T.N, ds = T.ds;
+    var SC = this.sc = SCENERY[T.def && T.def.scenery] || SCENERY.park, sandy = SC.ground === 'sand';
     var KS = T.ks || T.k || new Float32Array(T.N), KR = T.k || KS;
     var LO = (T.line && T.line.o) || new Float32Array(T.N);
     var shadowsOn = this.shadowsOn = !lo;
@@ -794,8 +855,9 @@
     TX.asph = asp ? keep(texOf(asp.col, true, true, aniso)) : null;
     TX.asphR = asp ? keep(texOf(asp.rgh, false, true, aniso)) : null;
     TX.asphN = asp && !lo ? keep(texOf(asp.nrm, false, true, aniso)) : null;
-    mk('grass', function () { return texOf(texGrass(TS), true, true, aniso); });
-    mk('lawn', function () { return texOf(texLawn(TS), true, true, aniso); });
+    mk('grass', function () { return texOf(sandy ? texSand(TS, false) : texGrass(TS), true, true, aniso); });
+    mk('lawn', function () { return texOf(sandy ? texSand(TS, true) : texLawn(TS), true, true, aniso); });
+    mk('bldg', function () { return texOf(texWindows(), true, true, Math.min(aniso, 4)); });
     try { grv = texGravel(TSB); } catch (e) { warn('żwir', e); }
     TX.gravel = grv ? keep(texOf(grv.col, true, true, aniso)) : null;
     TX.gravelN = grv && !lo ? keep(texOf(grv.nrm, false, true, aniso)) : null;
@@ -849,6 +911,8 @@
       crowdB: std({ map: TX.crowdB || null, roughness: 0.95, metalness: 0 }),
       sign: std({ map: TX.sign || null, roughness: 0.45, metalness: 0 }),
       facade: std({ map: TX.facade || null, vertexColors: true, roughness: 0.6, metalness: 0.05 }),
+      bldg: std({ map: TX.bldg || null, vertexColors: true, roughness: 0.75, metalness: 0.02 }),
+      rock: std({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0 }),
       tree: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85, metalness: 0 }),
       treeDet: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85, metalness: 0 }),
       treeFar: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.9, metalness: 0 }),
@@ -916,7 +980,7 @@
       if (!b) { b = batches[id] = new Batch(key); blist.push(b); }
       return b;
     }
-    var CAST = { concrete: 1, hoard: 1, tyre: 1, metal: 1, dark: 1, paintV: 1, glass: 1, roof: 1, crowdA: 1, crowdB: 1, sign: 1, facade: 1 };
+    var CAST = { concrete: 1, hoard: 1, tyre: 1, metal: 1, dark: 1, paintV: 1, glass: 1, roof: 1, crowdA: 1, crowdB: 1, sign: 1, facade: 1, bldg: 1, rock: 1 };
     function flush() {
       for (var k = 0; k < blist.length; k++) {
         var b = blist[k], mat = M[b.key];
@@ -1024,20 +1088,59 @@
     }
     var WHITE = lin(0xf2f2ec), YEL = lin(0xf5c518), GREENP = lin(0x2f8a4a);
 
+    // odległość od osi toru po rzadkich próbkach (co ok. 8 m; dla terenu i obiektów daleko od toru wystarcza)
+    var farIx = [], lastNear = 0;
+    for (var fi = 0; fi < N; fi += Math.max(1, Math.round(8 / ds))) farIx.push(fi);
+    function trackDist(x, z) {
+      var bd = Infinity;
+      for (var k = 0; k < farIx.length; k++) {
+        var j = farIx[k], dx = T.x[j] - x, dz = T.y[j] - z, d = dx * dx + dz * dz;
+        if (d < bd) { bd = d; lastNear = j; }
+      }
+      return Math.sqrt(bd);
+    }
+    function smooth01(a, b, v) { var t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+    // wydmy: zero przy torze, dalej grzbiety z szumu (wysokość w metrach)
+    function duneH(x, z, d) {
+      if (!SC.dunes || d < 320) return 0;
+      var n = vnoise(x / 260, z / 190, 65536, 71) * 0.7 + vnoise(x / 90, z / 110, 65536, 72) * 0.3, r = 1 - Math.abs(2 * n - 1);
+      return (r * r * r * 42 + vnoise(x / 700, z / 700, 65536, 73) * 22) * smooth01(320, 760, d);
+    }
+    // pola uprawne wokół lotniska: barwa wg komórki obróconej siatki (zieleń, zboże, zaorana ziemia)
+    var FIELD = [[1, 1, 1], [1.45, 1.25, 0.7], [1.9, 1.5, 0.55], [0.85, 1.05, 0.85], [1.55, 1.0, 0.85], [1.15, 1.12, 0.8]];
+    function fieldTint(x, z) {
+      var u = (x * 0.94 + z * 0.34) / 230, w = (-x * 0.34 + z * 0.94) / 170;
+      var cu = Math.floor(u + vnoise(x / 400, z / 400, 65536, 74) * 0.6), cw = Math.floor(w + vnoise(x / 400, z / 400, 65536, 75) * 0.6);
+      return FIELD[(hash2(cu + 311, cw - 97) * FIELD.length) | 0];
+    }
+
     // ---------- teren ----------
     safe('ziemia', function () {
-      var GS = 9000, GN = lo ? 36 : 72;
+      var GS = 9000, GN = SC.ground === 'grass' ? (lo ? 36 : 72) : (lo ? 72 : 150);
       var gg = keep(new THREE.PlaneGeometry(GS, GS, GN, GN));
       gg.rotateX(-Math.PI / 2); gg.translate(mcx, -0.08, mcz);
       var gp = gg.attributes.position, guv = gg.attributes.uv, gc = new Float32Array(gp.count * 3);
       for (var i = 0; i < gp.count; i++) {
-        var x = gp.getX(i), z = gp.getZ(i);
+        var x = gp.getX(i), z = gp.getZ(i), d = SC.ground === 'grass' ? 0 : trackDist(x, z);
         guv.setXY(i, x / 10, z / 10);
         var n = vnoise(x / 240, z / 240, 65536, 5) * 0.6 + vnoise(x / 60, z / 60, 65536, 6) * 0.4, dry = vnoise(x / 500, z / 500, 65536, 7);
         var v = 0.78 + n * 0.32;
+        if (sandy) {
+          // piasek: jaśniejsze grzbiety wydm, rdzawe i szarawe plamy
+          var hD = duneH(x, z, d);
+          gp.setY(i, -0.08 + hD);
+          v = 0.86 + n * 0.2 + Math.min(0.12, hD * 0.004);
+          gc[i * 3] = v * (1 + dry * 0.05); gc[i * 3 + 1] = v * (1 - dry * 0.03); gc[i * 3 + 2] = v * (1 - dry * 0.1);
+          continue;
+        }
         gc[i * 3] = v * (1 + dry * 0.18); gc[i * 3 + 1] = v; gc[i * 3 + 2] = v * (1 - dry * 0.15);
+        if (SC.ground === 'fields') {
+          var f = fieldTint(x, z), fk = smooth01(90, 180, d);
+          gc[i * 3] *= 1 + (f[0] - 1) * fk; gc[i * 3 + 1] *= 1 + (f[1] - 1) * fk; gc[i * 3 + 2] *= 1 + (f[2] - 1) * fk;
+        }
       }
       gg.setAttribute('color', new THREE.BufferAttribute(gc, 3));
+      if (SC.dunes) gg.computeVertexNormals();
       var gm = new THREE.Mesh(gg, M.grass);
       gm.receiveShadow = shadowsOn; gm.matrixAutoUpdate = false; gm.updateMatrix();
       scene.add(gm);
@@ -1572,6 +1675,207 @@
       }
     });
 
+    // ---------- otoczenie wg rodzaju toru (SCENERY): zabudowa, hangary, wieża, maszty oświetlenia, skały ----------
+    // zajęte miejsca (koła) w siatce, żeby obiekty otoczenia na siebie nie wchodziły
+    var placed = new Map(), PCELL = 60;
+    function occupy(x, z, r) {
+      var key = Math.floor(x / PCELL) + ',' + Math.floor(z / PCELL), a = placed.get(key);
+      if (!a) placed.set(key, a = []);
+      a.push([x, z, r]);
+    }
+    function nearCircles(map, cell, x, z, r, rMax, fn) {
+      var cx = Math.floor(x / cell), cz = Math.floor(z / cell), e = 1 + Math.ceil((r + rMax) / cell);
+      for (var gx = cx - e; gx <= cx + e; gx++) for (var gz = cz - e; gz <= cz + e; gz++) {
+        var a = map.get(gx + ',' + gz);
+        if (a) for (var k = 0; k < a.length; k++) if (fn(a[k])) return true;
+      }
+      return false;
+    }
+    // wolne miejsce na obiekt o promieniu r: dalej niż gap metrów za barierą, poza aleją, prostą startową, trybunami,
+    // padokiem, nasypem owalu, drzewami i innymi obiektami otoczenia
+    function clearAt(x, z, r, gap) {
+      var d = trackDist(x, z), i = lastNear, side = (x - T.x[i]) * T.nx[i] + (z - T.y[i]) * T.ny[i] > 0 ? 1 : -1;
+      var lim = (side > 0 ? T.barR : T.barL)[i] + gap;
+      if (side > 0 && T.pitB && T.pitB[i] > 0) lim = Math.max(lim, T.pitB[i] + 14);
+      if (inMain(i)) lim = Math.max(lim, side > 0 ? hw + 95 : hw + 55);
+      if (d < lim + r) return false;
+      for (var s = 0; s < scen.length; s++) {
+        var o = scen[s];
+        if (o && o.bb && x > o.bb[0] - r - 6 && x < o.bb[2] + r + 6 && z > o.bb[1] - r - 6 && z < o.bb[3] + r + 6) return false;
+      }
+      var Bp = R2D.banking || [];
+      for (var b = 0; b < Bp.length; b++) if (Math.hypot(Bp[b][0] - x, Bp[b][1] - z) < r + 18) return false;
+      if (nearCircles(placed, PCELL, x, z, r, 45, function (c) { return Math.hypot(c[0] - x, c[1] - z) < c[2] + r + 3; })) return false;
+      if (R2D.treeGrid && nearCircles(R2D.treeGrid, R2D.treeCell || 60, x, z, r, 8, function (t) { return Math.hypot(t.x - x, t.y - z) < r + (t.r || 4) + 1; })) return false;
+      return true;
+    }
+    // narożniki prostokąta w o środku (x, z), bok w wzdłuż kierunku a, bok d w poprzek
+    function rectPts(x, z, a, w, d) {
+      var c = Math.cos(a), s = Math.sin(a), hx = w / 2, hz = d / 2;
+      return [[x + c * hx - s * hz, z + s * hx + c * hz], [x - c * hx - s * hz, z - s * hx + c * hz],
+        [x - c * hx + s * hz, z - s * hx - c * hz], [x + c * hx + s * hz, z + s * hx - c * hz]];
+    }
+    function inFar(x, z) { return x > fx0 && x < fx0 + FL && z > fz0 && z < fz0 + FL; }
+    // dach dwuspadowy z okapem (kalenica wzdłuż kierunku a, rise nad ścianami) i szczyty w kolorze ścian
+    function gableRoof(x, z, a, w, d, y0, rise, col, wall) {
+      var c = Math.cos(a), s = Math.sin(a), hx = w / 2 + 0.4, hz = d / 2 + 0.5, ye = y0 - rise * 0.5 / (d / 2);
+      var ln = Math.hypot(rise, d / 2), B = bat('paintV', x, z);
+      function P(u, v, y) { return [x + c * u - s * v, y, z + s * u + c * v]; }
+      [-1, 1].forEach(function (sn) {
+        B.rect(P(hx, sn * hz, ye), P(-hx, sn * hz, ye), P(-hx, 0, y0 + rise), P(hx, 0, y0 + rise), -s * sn * rise / ln, (d / 2) / ln, c * sn * rise / ln, [0, 0, 1, 0, 1, 1, 0, 1], col);
+        var u = sn * w / 2, b0 = B.vc;
+        [P(u, -d / 2, y0), P(u, d / 2, y0), P(u, 0, y0 + rise)].forEach(function (p) { B.v(p[0], p[1], p[2], c * sn, 0, s * sn, 0, 0, wall[0], wall[1], wall[2]); });
+        B.tri(b0, b0 + 1, b0 + 2);
+      });
+    }
+    // budynek: ściany z oknami (piętro 3,6 m), dach płaski albo dwuspadowy
+    function building(x, z, a, w, d, h, wall, roof, pitched) {
+      var pts = rectPts(x, z, a, w, d), rise = pitched ? Math.min(d * 0.32, 4.5) : 0;
+      prism(pts, -0.06, h, 'bldg', wall, 3.6);
+      if (pitched) gableRoof(x, z, a, w, d, h, rise, roof, wall);
+      else { cap(pts, h, 'concrete', roof); prism(pts, h, h + 0.5, 'concrete', roof); }
+      if (inFar(x, z)) fsPoly(pts, 0, h + rise * 0.5);
+    }
+    // osiedla w pasie od near do far metrów od toru; kierunek ulic stały w dzielnicy (komórki 600 m)
+    function town(cfg) {
+      var R = rng(4242), sp = cfg.near < 60 ? 24 : 32, ext = cfg.far + 40, cand = [], x, z, k;
+      for (z = bb.miny - ext; z < bb.maxy + ext; z += sp) for (x = bb.minx - ext; x < bb.maxx + ext; x += sp) cand.push([x + (R() - 0.5) * sp * 0.4, z + (R() - 0.5) * sp * 0.4]);
+      for (k = cand.length - 1; k > 0; k--) { var j = (R() * (k + 1)) | 0, t = cand[k]; cand[k] = cand[j]; cand[j] = t; }
+      var pal = cfg.pal.map(lin), roofs = cfg.roof.map(lin), made = 0;
+      for (k = 0; k < cand.length && made < cfg.count; k++) {
+        x = cand[k][0]; z = cand[k][1];
+        var cl = vnoise(x / 520, z / 520, 65536, 91);
+        if (cl < cfg.cluster) continue;
+        var d = trackDist(x, z);
+        if (d < cfg.near || d > cfg.far || duneH(x, z, d) > 0.3) continue;
+        var a = (Math.floor(hash2(Math.floor(x / 600), Math.floor(z / 600)) * 4) * 0.4) + (cfg.near < 60 ? Math.atan2(T.ty[lastNear], T.tx[lastNear]) : 0);
+        var w = 11 + R() * 15, dd = 9 + R() * 10, r = Math.hypot(w, dd) / 2;
+        if (!clearAt(x, z, r, 14)) continue;
+        var tall = clamp((cl - cfg.cluster) / (1 - cfg.cluster), 0, 1), h = cfg.h[0] + (cfg.h[1] - cfg.h[0]) * Math.pow(R(), 1.5) * (0.5 + 0.5 * tall);
+        h = Math.max(cfg.h[0], Math.round(h / 3.6) * 3.6 - 0.4);
+        building(x, z, a, w, dd, h, pal[(R() * pal.length) | 0], roofs[(R() * roofs.length) | 0], R() < cfg.pitched);
+        occupy(x, z, r); made++;
+      }
+      self.buildingCount = made;
+    }
+    // miejsce przy torze: szuka od próbki i0 w obie strony (co ok. 20 m), po stronach sides, w odległości dMin..dMax
+    // od osi; test(x, z, a) sprawdza całe ustawienie (a — kierunek toru)
+    function findSpot(i0, sides, dMin, dMax, test) {
+      var st = Math.max(1, mS(20));
+      for (var t = 0; t < N / 2; t += st) for (var sg = -1; sg <= 1; sg += 2) {
+        var i = wrapI(i0 + sg * t, N);
+        for (var si = 0; si < sides.length; si++) for (var dd = dMin; dd <= dMax; dd += 15) {
+          var s = sides[si], x = T.x[i] + T.nx[i] * s * dd, z = T.y[i] + T.ny[i] * s * dd, a = Math.atan2(T.ty[i], T.tx[i]);
+          if (test(x, z, a, s, i)) return { x: x, z: z, a: a, s: s, i: i };
+        }
+      }
+      return null;
+    }
+    // hangar łukowy: oś wzdłuż kierunku a (długość L), szerokość Wd, wysokość H; wrota od strony +a
+    var arch = keep(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true, 0, Math.PI));
+    arch.rotateZ(Math.PI / 2);
+    function hangar(x, z, a, L, Wd, H) {
+      var c = Math.cos(a), s = Math.sin(a), GRN = lin(0x7a8274), K = 12;
+      bat('roof', x, z).geo(arch, boxM(x, 0, z, -a, L, H, Wd / 2), lin(0x9aa09a));
+      [-1, 1].forEach(function (e) {
+        var ex = x + c * e * L / 2, ez = z + s * e * L / 2, B = bat('paintV', ex, ez), b0 = B.vc;
+        B.v(ex, 0, ez, c * e, 0, s * e, 0, 0, GRN[0], GRN[1], GRN[2]);
+        for (var k = 0; k <= K; k++) {
+          var th = Math.PI * k / K, lat = Math.cos(th) * Wd / 2;
+          B.v(ex - s * lat, Math.sin(th) * H, ez + c * lat, c * e, 0, s * e, 0, 0, GRN[0], GRN[1], GRN[2]);
+          if (k) B.tri(b0, b0 + k, b0 + k + 1);
+        }
+        if (e > 0) {
+          var dw = Wd * 0.36, dh = H * 0.62, fx = ex + c * 0.06, fz = ez + s * 0.06;
+          bat('dark', fx, fz).rect([fx - s * dw, 0, fz + c * dw], [fx + s * dw, 0, fz - c * dw], [fx + s * dw, dh, fz - c * dw], [fx - s * dw, dh, fz + c * dw], c, 0, s, [0, 0, 1, 0, 1, 1, 0, 1]);
+        }
+      });
+      if (inFar(x, z)) fsPoly(rectPts(x, z, a, L, Wd * 0.8), 0, H * 0.75);
+    }
+    // wieża kontrolna lotniska: budynek z przeszklonym pomieszczeniem na górze
+    function controlTower(x, z, a) {
+      var p = rectPts(x, z, a, 9, 9), g = rectPts(x, z, a, 7, 7);
+      prism(p, -0.06, 8.6, 'bldg', lin(0xece8de), 3.6);
+      cap(p, 8.6, 'concrete', lin(0xd8d4ca));
+      prism(g, 8.6, 11.4, 'glass', null);
+      cap(g, 11.4, 'concrete', lin(0xd8d4ca));
+      box('metal', x, 13.4, z, 0, 0.2, 4, 0.2);
+      if (inFar(x, z)) fsPoly(p, 0, 11.4);
+    }
+
+    safe('zabudowa', function () { if (SC.town) town(SC.town); });
+    safe('hangary', function () {
+      if (!SC.hangars) return;
+      // rząd hangarów wrotami do toru i wieża kontrolna na końcu rzędu
+      var NH = 4, L = 46, Wd = 36, H = 13, gapH = 50;
+      var sp = findSpot(mS(T.length * 0.3), [1, -1], 130, 380, function (x, z, a, s) {
+        for (var k = -1; k <= NH; k++) {
+          var off = (k - (NH - 1) / 2) * gapH, cx = x + Math.cos(a) * off, cz = z + Math.sin(a) * off;
+          if (!clearAt(cx, cz, k < 0 || k === NH ? 10 : 31, 25)) return false;
+        }
+        return true;
+      });
+      if (!sp) return;
+      var ha = sp.a + (sp.s > 0 ? -Math.PI / 2 : Math.PI / 2); // oś hangaru w stronę toru
+      for (var k = -1; k <= NH; k++) {
+        var off = (k - (NH - 1) / 2) * gapH, cx = sp.x + Math.cos(sp.a) * off, cz = sp.z + Math.sin(sp.a) * off;
+        if (k === NH) controlTower(cx, cz, sp.a);
+        else if (k >= 0) hangar(cx, cz, ha, L, Wd, H);
+        occupy(cx, cz, k < 0 || k === NH ? 10 : 31);
+      }
+      self.hangarSpot = sp;
+    });
+    // wieża toru na pustyni: smukły trzon z szerszą, przeszkloną głowicą (za padokiem)
+    safe('wieża', function () {
+      if (!SC.tower || !T.pit) return;
+      var sp = findSpot(wrapI(T.pit.garage0 + mS(380), N), [1, -1], hw + 90, hw + 220, function (x, z) { return clearAt(x, z, 14, 30); });
+      if (!sp) return;
+      var x = sp.x, z = sp.z, a = sp.a, SAND = lin(0xe4d3b0);
+      var sh = rectPts(x, z, a, 11, 11), hd = rectPts(x, z, a, 19, 19), tp = rectPts(x, z, a, 15, 15);
+      prism(sh, -0.06, 40, 'bldg', SAND, 3.6);
+      cap(hd, 40, 'concrete', SAND, true);
+      prism(hd, 40, 47, 'glass', null);
+      cap(hd, 47, 'concrete', SAND);
+      prism(tp, 47, 50.5, 'bldg', SAND, 3.6);
+      cap(tp, 50.5, 'concrete', SAND);
+      box('metal', x, 56, z, 0, 0.35, 11, 0.35);
+      if (inFar(x, z)) fsPoly(hd, 0, 50);
+      occupy(x, z, 14);
+      self.towerSpot = sp;
+    });
+    // maszty oświetlenia wzdłuż toru (co ok. 170 m, na przemian po obu stronach)
+    safe('maszty', function () {
+      if (!SC.masts) return;
+      var step = mS(170), cnt = 0;
+      for (var i = mS(85); i < N; i += step, cnt++) {
+        var s = cnt % 2 ? 1 : -1;
+        if (inMain(i) || (s < 0 ? markL : markR)[i] || (s > 0 && inPitZone(i))) { s = -s; if (inMain(i) || (s < 0 ? markL : markR)[i] || (s > 0 && inPitZone(i))) continue; }
+        var d = s * ((s < 0 ? T.barL[i] : T.barR[i]) + 9), x = T.x[i] + T.nx[i] * d, z = T.y[i] + T.ny[i] * d;
+        if (!clearAt(x, z, 1, 6)) continue;
+        var ry = -Math.atan2(T.ty[i], T.tx[i]), hx = x - T.nx[i] * s * 0.6, hz = z - T.ny[i] * s * 0.6;
+        box('metal', x, 14, z, ry, 0.55, 28, 0.55);
+        box('dark', hx, 28.4, hz, ry, 4.2, 2.2, 0.5);
+        box('paintV', hx - T.nx[i] * s * 0.27, 28.4, hz - T.ny[i] * s * 0.27, ry, 3.8, 1.8, 0.06, lin(0xf3f1e6));
+        fsStroke([[x, z], [x + shDx * 28 * cotE, z + shDz * 28 * cotE]], 0.7, 120, false);
+        occupy(x, z, 3);
+      }
+    });
+    // kamienie i głazy na płaskim piasku przy torze
+    safe('skały', function () {
+      if (!SC.rocks) return;
+      var R = rng(77), geo = keep(new THREE.DodecahedronGeometry(1, 0)), made = 0, PAL = [0xb39a76, 0xa28866, 0xc4ab84, 0x8f7a5e].map(lin);
+      for (var k = 0; k < 4000 && made < 320; k++) {
+        var x = bb.minx - 300 + R() * (bb.maxx - bb.minx + 600), z = bb.miny - 300 + R() * (bb.maxy - bb.miny + 600);
+        var d = trackDist(x, z), sz = 0.5 + R() * R() * 3.2;
+        if (d > 330 || !clearAt(x, z, sz, 22)) continue;
+        var sy = sz * (0.45 + R() * 0.35);
+        _q.setFromEuler(new THREE.Euler(R() * 0.5, R() * PI2, R() * 0.5));
+        bat('rock', x, z).geo(geo, _m4.compose(_p.set(x, sy * 0.35 - 0.1, z), _q, _s.set(sz, sy, sz * (0.7 + R() * 0.5))), PAL[(R() * PAL.length) | 0]);
+        if (sz > 1.2) occupy(x, z, sz);
+        made++;
+      }
+    });
+
     flush();
 
     // ---------- bramka ze światłami startu ----------
@@ -1735,7 +2039,7 @@
     // Maska w rzucie z góry: R — odległość od twardej nawierzchni (0..20 m, pole odległości dobrze się interpoluje),
     // G — gdzie rośnie trawa (pas między poboczem a barierą i trawnik za barierą bez trybun).
     safe('trawa 3D', function () {
-      if (lo || !TX.tuft) return;
+      if (lo || !TX.tuft || !SC.tufts) return;
       var MS = 2048, mk2 = MS / FL, DF = 20;
       var cA = makeCanvas(MS, MS), gA = cA.getContext('2d'), cB = makeCanvas(MS, MS), gB = cB.getContext('2d');
       gA.fillStyle = '#000'; gA.fillRect(0, 0, MS, MS);
@@ -1896,30 +2200,33 @@
 
   W.setWeather = function (env) {
     var key = env && (env.wet || env.weather === 'rain') ? 'rain' : (env && env.weather === 'cloud' ? 'cloud' : 'sun');
-    var P = WEATHER[key], M = this.mats, w = P.wet, k;
+    var P = WEATHER[key], M = this.mats, w = P.wet, k, SC = this.sc || {};
     var changed = key !== this.wKey;
+    // otoczenie toru: barwa horyzontu i ziemi w niebie, światło odbite od podłoża (np. ciepłe od piasku)
+    function tint(a, m) { return m ? [a[0] * m[0], a[1] * m[1], a[2] * m[2]] : a; }
+    var hor = tint(P.hor, SC.hor), gnd = tint(P.gnd, SC.gnd), hemiG = SC.hemiG ? tint(SC.hemiG, [P.hemiG[1] / 0.34, P.hemiG[1] / 0.34, P.hemiG[1] / 0.34]) : P.hemiG;
     this.wKey = key; this.exposure = P.exp;
     if (this.renderer) { try { this.renderer.toneMappingExposure = P.exp; } catch (e) { /* nic */ } }
     if (this.skyMat) {
       var u = this.skyMat.uniforms;
       u.uZenith.value.setRGB(P.zen[0], P.zen[1], P.zen[2]);
-      u.uHorizon.value.setRGB(P.hor[0], P.hor[1], P.hor[2]);
-      u.uGround.value.setRGB(P.gnd[0], P.gnd[1], P.gnd[2]);
+      u.uHorizon.value.setRGB(hor[0], hor[1], hor[2]);
+      u.uGround.value.setRGB(gnd[0], gnd[1], gnd[2]);
       u.uSunCol.value.setRGB(P.skySun[0], P.skySun[1], P.skySun[2]);
       u.uCloudCol.value.setRGB(P.cloudC[0], P.cloudC[1], P.cloudC[2]);
       u.uCloud.value.x = P.cloud[0]; u.uCloud.value.y = P.cloud[1]; u.uCloud.value.w = P.cloud[2];
       u.uSunDisk.value = P.disk; u.uHaze.value = P.haze;
     }
     // mgła = kolor horyzontu po mapowaniu tonów (bez szwu z niebem)
-    var fc = aces(P.hor, P.exp);
-    this._fogMap = fc; this._fogLin = P.hor.slice();
+    var fc = aces(hor, P.exp);
+    this._fogMap = fc; this._fogLin = hor.slice();
     if (this.scene.fog) { this.scene.fog.color.setRGB(fc[0], fc[1], fc[2]); this.scene.fog.near = P.fogN; this.scene.fog.far = P.fogF; }
     if (this.scene.background && this.scene.background.isColor) this.scene.background.setRGB(fc[0], fc[1], fc[2]);
     if (changed || !this.envOK) this._makeEnv();
     if (this.sun) { this.sun.color.setRGB(P.sunC[0], P.sunC[1], P.sunC[2]); this.sun.intensity = P.sunI; }
     if (this.hemi) {
       this.hemi.color.setRGB(P.hemiS[0], P.hemiS[1], P.hemiS[2]);
-      this.hemi.groundColor.setRGB(P.hemiG[0], P.hemiG[1], P.hemiG[2]);
+      this.hemi.groundColor.setRGB(hemiG[0], hemiG[1], hemiG[2]);
       this.hemi.intensity = this.envOK ? P.hemiI : P.hemiI * 1.6; // bez mapy otoczenia więcej światła rozproszonego
     }
     // nawierzchnie: mokry tor ciemniejszy i błyszczący

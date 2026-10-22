@@ -624,6 +624,7 @@
     var t0 = performance.now();
     var W3 = PG.World3D || PG.World3DLite;
     this.world = new W3(T, R2D, { quality: q, renderer: r });
+    this.sandy = !!(this.world.sc && this.world.sc.ground === 'sand');
     this.buildMs = performance.now() - t0;
     this.scene = this.world.scene;
     this.findLights();
@@ -956,7 +957,7 @@
     // --- pył ze żwiru i trawy (jak dawniej) ---
     var rx0 = c.x - ch * 1.9, rz0 = c.y - sh * 1.9;
     if ((surf === 'gravel' || surf === 'grass') && av > 4) {
-      var gr = surf === 'gravel';
+      var gr = surf === 'gravel' || this.sandy; // na pustyni poza torem jest piasek
       n = take(acc, 9, em * 60, dt, 4);
       for (j = 0; j < n; j++) this.dust.add(rx0 + (RND() - 0.5) * 1.6, 0.3, rz0 + (RND() - 0.5) * 1.6, -ch * av * 0.15 + (RND() - 0.5) * 3, 1 + RND() * 2, -sh * av * 0.15 + (RND() - 0.5) * 3, 1.2 + RND(), gr ? 0.78 : 0.42, gr ? 0.7 : 0.5, gr ? 0.55 : 0.3, 0.55, 1.1, 2.5, 1.2, 0.4);
     } else acc[9] = 0;
