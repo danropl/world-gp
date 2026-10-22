@@ -255,6 +255,7 @@
     else if (t === 'dot') { r(0, 0, 12, 8, f[1]); g.fillStyle = f[2]; g.beginPath(); g.arc(6, 4, 2.2, 0, Math.PI * 2); g.fill(); }
     else if (t === 'vdot') { r(0, 0, 12, 8, f[2]); r(0, 0, 3, 8, f[1]); r(9, 0, 3, 8, f[1]); g.fillStyle = f[1]; g.beginPath(); g.moveTo(6, 1.8); g.lineTo(7.6, 5.4); g.lineTo(4.4, 5.4); g.closePath(); g.fill(); }
     else if (t === 'cross') { r(0, 0, 12, 8, f[1]); r(3.2, 0, 1.6, 8, f[2]); r(0, 3.2, 12, 1.6, f[2]); }
+    else if (t === 'serrate') { r(0, 0, 12, 8, f[2]); g.fillStyle = f[1]; g.beginPath(); g.moveTo(0, 0); g.lineTo(3, 0); for (var z = 0; z < 5; z++) { g.lineTo(4.4, (z + 0.5) * 1.6); g.lineTo(3, (z + 1) * 1.6); } g.lineTo(0, 8); g.closePath(); g.fill(); }
     else if (t === 'plus') { r(0, 0, 12, 8, f[1]); r(5.2, 1.5, 1.6, 5, f[2]); r(3.5, 3.2, 5, 1.6, f[2]); }
     else if (t === 'diamond') { r(0, 0, 12, 8, f[1]); g.fillStyle = f[2]; g.beginPath(); g.moveTo(6, 1); g.lineTo(11, 4); g.lineTo(6, 7); g.lineTo(1, 4); g.closePath(); g.fill(); g.fillStyle = '#002776'; g.beginPath(); g.arc(6, 4, 1.6, 0, Math.PI * 2); g.fill(); }
     else if (t === 'gb') {
