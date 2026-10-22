@@ -12,9 +12,9 @@ var PG = globalThis.PG;
 var T = PG.buildTrack(PG.MONZA);
 var mode = process.argv[2] || 'all', LAPS = +(process.argv[3] || 3);
 
-function entries(nPlayer) {
+function entries(nPlayer, comp) {
   var out = [];
-  PG.DEFAULT_TEAMS.forEach(function (t) { t.drivers.forEach(function (d) { out.push({ driver: d, team: t, isPlayer: false, compound: 'M' }); }); });
+  PG.DEFAULT_TEAMS.forEach(function (t) { t.drivers.forEach(function (d) { out.push({ driver: d, team: t, isPlayer: false, compound: comp }); }); });
   if (nPlayer !== undefined) out[nPlayer].isPlayer = true;
   return out;
 }
@@ -28,7 +28,7 @@ function seed(n) {
 function race(fps, laps, opt) {
   opt = opt || {};
   if (opt.seed !== undefined) seed(opt.seed);
-  var S = PG.createSession({ track: T, entries: entries(0), mode: 'race', laps: laps, weather: opt.weather || 'sun', difficulty: opt.difficulty || 'normal', damage: 'full', autoPlayer: true, incidents: 'off' });
+  var S = PG.createSession({ track: T, entries: entries(0, opt.compound || (opt.weather === 'rain' ? 'W' : 'M')), mode: 'race', laps: laps, weather: opt.weather || 'sun', difficulty: opt.difficulty || 'normal', damage: 'full', autoPlayer: true, incidents: 'off' });
   var dt = 1 / fps, t = 0, stats = S.cars.map(function () { return { off: 0, wall: 0, maxWall: 0, resets: 0, laps: [] }; });
   var resetCount = {};
   var origReset = PG.resetCar;

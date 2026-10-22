@@ -248,18 +248,32 @@
     var look = Math.round((12 + v * 0.36) / T.ds);
     var ai = car.ai;
     // unikanie i wyprzedzanie
-    var wantOff = 0, cap = Infinity, close = false;
+    // w zakręcie (i przed nim) trzymaj się blisko linii: inny tor jazdy przy prędkości z profilu wynosi bolid z toru
+    var kAh = 0, nAh = Math.round((20 + v * 1.2) / T.ds);
+    for (var ka = 0; ka <= nAh; ka += 3) { var kk = Math.abs(L.k[(car.idx + ka) % N]); if (kk > kAh) kAh = kk; }
+    var offLim = kAh > 1 / 250 ? 1.5 : kAh > 1 / 600 ? 3 : 99;
+    // gdzie będziemy jechać za chwilę (powrót na linię przed zakrętem) — rywal na tym torze też jest „przed nami"
+    var offNext = Math.max(-offLim, Math.min(offLim, car.offsetTarget || 0));
+    var wantOff = 0, cap = Infinity, close = false, sideLo = -Infinity, sideHi = Infinity;
     for (var i = 0; i < cars.length; i++) {
       var o = cars[i]; if (o === car || o.retired) continue;
       if (car.ghost > 0 || o.ghost > 0) continue; // po powrocie na tor bolidy przenikają się — nie blokuj się nawzajem
       var dd = o.dist - car.dist;
+      // bolid obok (zachodzą na siebie): nie zjeżdżaj na niego bokiem; jeśli jest przed nami, odpuść i schowaj się za nim
+      if (dd > -7 && dd < 7 && o.v > 3) {
+        var lds = o.lat - car.lat;
+        if (lds > -4 && lds < 4) {
+          if (lds > 0) sideHi = Math.min(sideHi, o.lat - 2.5); else sideLo = Math.max(sideLo, o.lat + 2.5);
+          if (dd > 1.5 && v > o.v - 1) cap = Math.min(cap, o.v - 1.5);
+        }
+      }
       // bardzo wolny bolid przed nami (obrót, uszkodzenie): hamuj na czas, z zasięgiem drogi hamowania
       if (dd > 0 && dd < 12 + v * v / 40 && o.v < Math.min(v * 0.6, 20) && Math.abs(o.lat - car.lat) < 3.2) {
         var ov = Math.max(0, o.v);
         cap = Math.min(cap, Math.sqrt(ov * ov + 2 * 20 * Math.max(0, dd - 8)));
       }
       if (dd > 0 && dd < 34) {
-        var ld = Math.abs(o.lat - car.lat);
+        var ld = Math.min(Math.abs(o.lat - car.lat), Math.abs(o.lat - (L.o[o.idx] || 0) - offNext));
         if (ld < 4.4) {
           var myPot = car.profile.v[car.idx] * ai.pace;
           if (car.v > o.v + 0.3 || myPot > o.v + 1.5) {
@@ -277,11 +291,11 @@
       }
     }
     if (wantOff === 0) ai.side = 0;
-    // w zakręcie (i przed nim) trzymaj się blisko linii: inny tor jazdy przy prędkości z profilu wynosi bolid z toru
-    var kAh = 0, nAh = Math.round((20 + v * 1.2) / T.ds);
-    for (var ka = 0; ka <= nAh; ka += 3) { var kk = Math.abs(L.k[(car.idx + ka) % N]); if (kk > kAh) kAh = kk; }
-    var offLim = kAh > 1 / 250 ? 1.5 : kAh > 1 / 600 ? 3 : 99;
     car.offsetTarget = Math.max(-offLim, Math.min(offLim, wantOff));
+    if (sideLo > -Infinity || sideHi < Infinity) {
+      var lo0 = sideLo - (L.o[car.idx] || 0), hi0 = sideHi - (L.o[car.idx] || 0);
+      car.offsetTarget = lo0 > hi0 ? (lo0 + hi0) / 2 : Math.max(lo0, Math.min(hi0, car.offsetTarget));
+    }
     car.offset += (car.offsetTarget - car.offset) * Math.min(1, dt * (offLim < 99 ? 3 : 1.6));
     var ti = (car.idx + look) % N;
     var off = Math.max(-T.hw + 2.2 - L.o[ti], Math.min(T.hw - 2.2 - L.o[ti], car.offset));

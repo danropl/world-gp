@@ -24,7 +24,7 @@
     S: { kL: 0.15, apF: 0.095, apR: 0.085, kp: 0.11, tOpt: 95, tW: 16 },
     M: { kL: 0.15, apF: 0.090, apR: 0.080, kp: 0.10, tOpt: 105, tW: 20 },
     H: { kL: 0.14, apF: 0.085, apR: 0.075, kp: 0.09, tOpt: 115, tW: 24 },
-    W: { kL: 0.12, apF: 0.110, apR: 0.100, kp: 0.12, tOpt: 60, tW: 20 }
+    W: { kL: 0.12, apF: 0.110, apR: 0.100, kp: 0.12, tOpt: 65, tW: 24 }
   };
   Object.keys(TP).forEach(function (k) { if (PG.TYRES && PG.TYRES[k]) { var t = PG.TYRES[k]; Object.keys(TP[k]).forEach(function (q) { t[q] = TP[k][q]; }); } });
   // Temperatura powietrza i asfaltu (°C) dla pogody
@@ -357,6 +357,10 @@
       if (avx < 2) s.aiI = 0;
       else s.aiI = clamp(s.aiI + 8 * V.L * e * dt, -0.12, 0.12);
       dl = kc * V.L + s.aiI + 2.2 * V.L * e;
+      // tył za szczytem przyczepności (nadsterowność): kontra od nadmiaru kąta znoszenia tylnej osi — sama
+      // prędkość odchylania tego nie widzi, bo przy poślizgu bolid „płynie" bokiem, a r rośnie powoli
+      var aR = Math.atan2(vy - V.b * r, vxs), apR = tp.apR / q.kB, exR = aR - clamp(aR, -apR, apR);
+      if (avx > 6) dl += 1.2 * exR;
       // nie skręcaj dalej niż szczyt przedniej opony (podsterowność nic nie daje), kontra wynika z regulatora
       dl = clamp(dl, aF - 1.05 * apF, aF + 1.05 * apF);
     }
@@ -637,7 +641,8 @@
       tot += s.wr[i];
     }
     car.wear = tot / 4;
-    var g = (s.fT[0] + s.fT[1] + s.fT[2] + s.fT[3]) / 4;
+    // grip z temperatur ogranicza słabsza oś (zimny przód → podsterowność, przegrzany tył → nadsterowność)
+    var gF = (s.fT[0] + s.fT[1]) / 2, gR = (s.fT[2] + s.fT[3]) / 2, g = gF < gR ? gF : gR;
     car.gripT = g > 0 ? g : 1;
     car.tyreTs = s.Ts; car.tyreTc = s.Tc; car.tyreW = s.wr; car.brakeT = s.Tb;
   }
