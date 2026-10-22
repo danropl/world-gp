@@ -4,7 +4,7 @@ WORLD GP korzysta z poniższych bibliotek, danych i fontów. Wszystkie są na li
 
 ## Znaki towarowe
 
-WORLD GP to gra fanowska, niezwiązana z Formułą 1, FIA, Formula One Licensing B.V. ani żadnym zespołem, producentem czy kierowcą. F1, FORMULA 1, FORMULA ONE i GRAND PRIX są znakami towarowymi ich właścicieli. Zespoły, kierowcy, silniki i tory w grze (nazwy torów i zakrętów) są fikcyjni. Gra nie zawiera żadnych nagrań dźwięku z innych gier; funkcja „Własne nagrania” odtwarza wyłącznie pliki, które gracz sam wczyta ze swojego dysku i do których musi mieć prawa.
+WORLD GP to gra fanowska, niezwiązana z Formułą 1, FIA, Formula One Licensing B.V. ani żadnym zespołem, producentem czy kierowcą. F1, FORMULA 1, FORMULA ONE i GRAND PRIX są znakami towarowymi ich właścicieli. Zespoły, kierowcy, silniki i tory w grze (nazwy torów i zakrętów) są fikcyjni. Gra nie zawiera żadnych nagrań dźwięku z innych gier; funkcje „Własne nagrania” i „Wczytaj bank dźwięków” (samochód bezpieczeństwa) odtwarzają wyłącznie pliki, które gracz sam wczyta ze swojego dysku i do których musi mieć prawa. Samochód bezpieczeństwa to model generowany w kodzie, bez znaków żadnego producenta.
 
 ## three.js — `js/vendor/three.min.js`
 

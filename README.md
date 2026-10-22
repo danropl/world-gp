@@ -99,7 +99,7 @@ Na kierownicy skręt i pedały działają wprost, bez wygładzania, a gaz i hamu
 - **Kwalifikacje Q1 · Q2 · Q3:** po Q1 odpada pięciu najwolniejszych, po Q2 kolejnych pięciu, Q3 ustala pierwszą dziesiątkę. Każdy segment można przejechać albo zasymulować. Do wyboru też jedno okrążenie.
 - **Pit stopy:** `B` (pad: `L1` albo `Create`) zgłasza zjazd, `1`–`4` (pad: krzyżak ▲▼) wybiera opony. Przejazd aleją prowadzi gra (80 km/h przy garażach), na stanowisku wymiana opon i naprawa skrzydeł. AI ma własną strategię. Na suchym torze od 10 okrążeń obowiązują dwie różne mieszanki (inaczej +30 s).
 - **Zjazd bez zgłoszenia:** możesz też po prostu skręcić w drogę zjazdu za Curva Finale, zanim zacznie się mur alei. Mechanicy nie czekają wtedy z oponami, więc postój trwa o ok. 7–9 s dłużej.
-- **Samochód bezpieczeństwa i VSC:** po wypadkach, awariach AI i przy odłamkach. Pod SC kolejka bez wyprzedzania i restart na linii mety, pod VSC limit prędkości. DRS wraca dwa okrążenia po restarcie. Częstość awarii: wyłączone / rzadko / często.
+- **Samochód bezpieczeństwa i VSC:** po wypadkach, awariach AI i przy odłamkach. Pod SC kolejka bez wyprzedzania i restart na linii mety, pod VSC limit prędkości. DRS wraca dwa okrążenia po restarcie. Częstość awarii: wyłączone / rzadko / często. Samochód bezpieczeństwa to srebrne coupé GT z długą maską, kabiną przesuniętą do tyłu, skrzydłem i belką świateł (bez znaków producenta); słychać jego V8 (niżej).
 
 ## Multiplayer
 
@@ -141,6 +141,14 @@ Każdy producent silnika w grze (Ferro, Stella, Kaze, Renova) dostaje nagranie z
 Jak to działa: plik `.bdl` to pakiet nagrań silnika. Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Na ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania (punkty pętli dobrane tak, by jej koniec gładko przechodził w początek). Gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku. Odtwarzanie działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`; z innego adresu ten sam kod liczy się w wątku głównym.
 
 Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Firefox 113+; w starszych rozpakuj ZIP i wskaż folder.
+
+## Dźwięk samochodu bezpieczeństwa (opcjonalnie)
+
+Samochód bezpieczeństwa ma wbudowany dźwięk V8 (synteza z oscylatorów), z odległością, kierunkiem i efektem Dopplera. Obroty i gaz liczy wirtualna 7-biegowa skrzynia z prędkości SC: zmiany biegów, przerwa zapłonu przy zmianie w górę, strzały z wydechu po odpuszczeniu gazu i przy redukcji.
+
+Zamiast niego można wczytać ze swojego dysku bank dźwięków FMOD (`.bank`) z nieskompresowanymi pętlami silnika V8 coupé GT: **Ustawienia → Dźwięk → Samochód bezpieczeństwa → Wczytaj bank dźwięków (.bank)…**. **Gra nie zawiera tych nagrań** — wczytaj tylko bank, do którego masz prawa. Gra czyta z banku tylko potrzebne pętle (gaz i hamowanie silnikiem, mikrofony z przodu i z tyłu auta, strzały z wydechu), skraca je do 12 s mono i zapisuje tylko w tej przeglądarce (IndexedDB); nic nie jest wysyłane, a `.gitignore` blokuje dodanie plików `.bank` do gita. Inni gracze w multiplayerze słyszą dźwięk wbudowany. **Usuń bank** kasuje dźwięki z przeglądarki.
+
+Jak to działa: bank FMOD zawiera kontener FSB5 z próbkami. Każda pętla gra w swoim zakresie obrotów (sąsiednie przenikają się) z wysokością dźwięku obroty / obroty odniesienia pętli, jak w zdarzeniu silnika zapisanym w banku. Mikrofony z przodu i z tyłu mieszają się według kąta między autem a kamerą, a gaz przenika między pętlami z gazem i bez gazu.
 
 ## Grafika 3D
 

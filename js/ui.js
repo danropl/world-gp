@@ -140,6 +140,8 @@
     document.addEventListener('pointerdown', function () { PG.Audio.init(); }, { once: true });
     // paczka dźwięków silników zapisana w tej przeglądarce (jeśli gracz ją wczytał)
     if (PG.EnginePack) PG.EnginePack.load();
+    // dźwięki samochodu bezpieczeństwa z banku wczytanego wcześniej przez gracza
+    if (PG.SCSound) PG.SCSound.load();
   };
 
   // Gra działa tylko w 3D: bez WebGL zamiast menu jest wyjaśnienie
@@ -355,6 +357,38 @@
     box.appendChild(packBox);
     box.appendChild(fileIn); box.appendChild(dirIn);
     return box;
+  }
+  // Dźwięk samochodu bezpieczeństwa: wbudowany albo z banku FMOD wczytanego z dysku gracza
+  function scSoundPanel() {
+    var SCS = PG.SCSound, box = h('div', { class: 'col', style: 'gap:6px' }), msg = '';
+    if (!SCS) return box;
+    var fileIn = h('input', { type: 'file', accept: '.bank', style: 'display:none', onchange: function () { pick(fileIn.files && fileIn.files[0]); fileIn.value = ''; } });
+    var mb = function (b) { return (b / 1048576).toFixed(1).replace('.', ',') + ' MB'; };
+    var pick = function (f) {
+      if (!f) return;
+      msg = 'Czytam bank…'; draw();
+      SCS.open(f).then(function () { msg = ''; UI.toast('Dźwięk samochodu bezpieczeństwa: ' + f.name); draw(); }, function () { msg = ''; draw(); });
+    };
+    var draw = function () {
+      box.innerHTML = '';
+      box.appendChild(h('h3', { text: 'Samochód bezpieczeństwa', style: 'margin-top:4px' }));
+      var inf = SCS.info;
+      box.appendChild(h('p', { style: 'margin:0', text: SCS.busy || msg ? (msg || 'Czytam bank…')
+        : inf ? 'Wczytano: ' + inf.name + ' (' + mb(inf.bytes) + ')' + (inf.unsaved ? '. Przeglądarka nie pozwoliła zapisać dźwięków — działają do zamknięcia strony.' : '')
+        : 'Wbudowany dźwięk V8.' }));
+      if (SCS.error) box.appendChild(h('p', { style: 'margin:0;color:var(--red)', text: SCS.error }));
+      var row = h('div', { class: 'row' }, h('button', { type: 'button', text: inf ? 'Wczytaj inny bank…' : 'Wczytaj bank dźwięków (.bank)…', disabled: SCS.busy, onclick: function () { fileIn.click(); } }));
+      if (inf && !SCS.busy) {
+        var del = h('button', { type: 'button', class: 'danger', text: 'Usuń bank' });
+        del.onclick = function () { confirmInline(del, 'Usunąć dźwięki SC z przeglądarki?', function () { SCS.remove(); draw(); }); };
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+      box.appendChild(note('Bank FMOD z nieskompresowanymi pętlami silnika V8 coupé GT. Gra nie zawiera tych nagrań: wczytaj tylko bank, do którego masz prawa. Dźwięki zostają w tej przeglądarce i nigdzie nie są wysyłane; inni gracze słyszą dźwięk wbudowany.'));
+    };
+    draw();
+    var off = SCS.onChange(function () { if (box.isConnected) draw(); }); UI.onLeave(off);
+    return h('div', {}, box, fileIn);
   }
   // Sterowanie padem (krótka ściąga)
   // Schemat pada DualSense (PS5) z opisem sterowania; przełącznik pokazuje układ dla automatycznej albo ręcznej skrzyni
@@ -731,6 +765,7 @@
     var vol = h('input', { type: 'range', id: 'vol', min: 0, max: 100, value: Math.round(st.vol * 100), oninput: function () { st.vol = vol.value / 100; PG.Audio.setVol(st.vol); Store.save(); } });
     dp.appendChild(h('label', { class: 'field' }, 'Głośność', vol));
     dp.appendChild(enginePanel(st));
+    dp.appendChild(scSoundPanel());
     dp.appendChild(h('h3', { text: 'Zapis gry', style: 'margin-top:6px' }));
     var del = h('button', { type: 'button', class: 'danger', text: 'Usuń zapis gry' });
     del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () {
