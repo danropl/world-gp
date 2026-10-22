@@ -39,6 +39,8 @@ Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod
 | `←` `→` | skręt |
 | `E` / `Spacja` | DRS |
 | `X` / `Z` | bieg w górę / w dół (ręczna skrzynia) |
+| `[` / `]` | balans hamulców do tyłu / do przodu |
+| `T` | poziom kontroli trakcji (wył. → 1 → 2 → 3) |
 | `R` | powrót na tor |
 | `C` | kamera |
 | `V` | patrz do tyłu |
@@ -49,7 +51,7 @@ Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕`
 
 Klawisze można zmienić w **Ustawienia → Sterowanie**: każda akcja ma dwa pola, kliknij pole i naciśnij nowy klawisz (Backspace czyści, Esc anuluje, zajęty klawisz zamienia się miejscami). Przypisania zapisują się w ciasteczku `wgp_keys` tej przeglądarki, nie na serwerze; „Przywróć domyślne” wraca do tabeli powyżej. W **Ustawienia → Kontroler** jest schemat pada PS5 z opisem przycisków dla skrzyni automatycznej i ręcznej.
 
-W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który leży wizualnie w danym kierunku (także w siatce kart zespołów i między kolumnami ustawień); `Enter` / `✕` wybiera, `Esc` / `○` wraca. Ustawienia są podzielone na sekcje z boczną nawigacją (Grafika, Jazda, Kontroler, Dźwięk, Sterowanie), a w szybkim wyścigu panel ustawień z przyciskiem startu zostaje widoczny przy przewijaniu listy zespołów.
+W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który leży wizualnie w danym kierunku (także w siatce kart zespołów i między kolumnami ustawień); `Enter` / `✕` wybiera, `Esc` / `○` wraca. Ustawienia są podzielone na sekcje z boczną nawigacją (Grafika, Jazda, Kierownica i pedały, Kontroler, Dźwięk, Sterowanie), a w szybkim wyścigu panel ustawień z przyciskiem startu zostaje widoczny przy przewijaniu listy zespołów.
 
 ### Ręczna skrzynia biegów (opcja)
 
@@ -60,6 +62,36 @@ W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który
 - Redukcja, po której silnik przekroczyłby obroty, jest blokowana. Niższy bieg mocniej hamuje silnikiem.
 - Kto zmienia biegi przy ok. 18 500 obr./min (zapalone prawie wszystkie diody), jest prawie tak szybki jak automat (0–200 km/h: 4,7 s wobec 4,6 s).
 - Aleja serwisowa, powrót na tor (`R`) i przejęcie bolidu przez AI ustawiają bieg automatycznie.
+
+## Fizyka bolidu
+
+Bolid to model na czterech kołach liczony co 2 ms (niezależnie od liczby klatek): opony według Magic Formula Pacejki z łączonym poślizgiem (hamowanie i skręt dzielą przyczepność), czułością na nacisk i długością relaksacji, transfer masy wzdłuż i w poprzek ze sprężynami, stabilizatorami i amortyzatorami, prześwit wpływający na docisk (i dobijanie podłogi), silnik V10 do 19 000 obr./min z 8 biegami, dyferencjał z blokadą zależną od gazu, hamulce z temperaturą tarcz. Tak samo jeżdżą gracz i AI.
+
+- **Opony:** temperatura bieżnika i karkasu (nagrzewanie od poślizgu i ugniatania, chłodzenie powietrzem i deszczem) oraz zużycie zależne od energii poślizgu. Zimne opony i przegrzane wyraźnie tracą przyczepność; okno pracy zależy od mieszanki (miękkie ok. 95 °C, pośrednie 105 °C, twarde 115 °C, deszczowe 65 °C). Na starcie wyścigu opony mają 80 °C z koców.
+- **HUD:** widżet obok deski pokazuje cztery opony: kolor to temperatura (niebieska zimna, zielona w oknie, żółta i czerwona przegrzana), liczba to temperatura bieżnika, pasek to zużycie, kreska przy kole to tarcza hamulcowa; pod spodem balans hamulców.
+- **Nadwozie** w 3D przechyla się i nurkuje według modelu zawieszenia (kąty powiększone, żeby były widoczne).
+
+### Asysty
+
+**Ustawienia → Jazda → Asysty** (także w pauzie). Zestawy: **Łatwy** (ABS, kontrola trakcji 3, wspomaganie skrętu, kontra, kontrola stabilności), **Standard** (kontrola trakcji 2, wspomaganie skrętu na padzie i klawiaturze) i **Sim** (bez asyst, ręczna skrzynia, DRS ręcznie). Każdą asystę można też ustawić osobno:
+
+- **ABS** zwalnia hamulec koła, które zaczyna się blokować. Bez ABS zablokowane koło dymi, słabo skręca i robi płaskie miejsce na oponie.
+- **Kontrola trakcji** 0–3: 1 pozwala na sporo buksowania, 3 pilnuje przyczepności jak AI. Klawisz `T` zmienia poziom w trakcie jazdy.
+- **Wspomaganie skrętu:** pełne wychylenie skręca tylko do granicy przyczepności przednich opon. „Auto” włącza je na padzie i klawiaturze, a na kierownicy wyłącza.
+- **Kontra przy poślizgu** sama koryguje uślizg tyłu, **kontrola stabilności** odejmuje gaz, gdy tył ucieka.
+
+### Setup bolidu
+
+Przycisk **Setup bolidu** jest w szybkim wyścigu, przed kwalifikacjami, na ekranie pól startowych i w pauzie (w kwalifikacjach, przed startem wyścigu albo w boksie). Ustawiasz skrzydła, balans hamulców, dyferencjał (blokada na gazie, bez gazu, napięcie wstępne), sprężyny, stabilizatory, amortyzatory, prześwit, ciśnienie w oponach i przełożenia; są też zestawy (mały i duży docisk, zrównoważony, deszcz). Obok widać szacunek z modelu: prędkość maksymalną, przyczepność przy 150 i 250 km/h, hamowanie, rozkład docisku i idealny czas okrążenia względem ustawień domyślnych. Setup zapisuje się osobno dla każdego toru. Balans hamulców zmieniasz też w trakcie jazdy (`[` / `]`).
+
+### Kierownica i pedały
+
+Kierownice (Logitech, Thrustmaster, Fanatec, Moza, Simucube i inne) i osobne pedały działają przez Gamepad API. Przeglądarka pokazuje urządzenie dopiero po pierwszym ruchu albo naciśnięciu przycisku.
+
+1. **Ustawienia → Kierownica i pedały → Kalibruj:** puść pedały i ustaw kierownicę prosto, skręć do oporu w lewo, wciśnij gaz, wciśnij hamulec, potem naciśnij łopatki biegów (można pominąć). Kreator sam rozpoznaje osie i przyciski, także gdy pedały są osobnym urządzeniem albo gaz i hamulec dzielą jedną oś.
+2. Ustaw **obrót kierownicy** taki jak w programie producenta (np. 900°) i **pełny skręt bolidu** (domyślnie 360° od oporu do oporu, jak w bolidzie F1).
+
+Na kierownicy skręt i pedały działają wprost, bez wygładzania, a gaz i hamulec można wciskać jednocześnie. Łopatki zmieniają biegi przy ręcznej skrzyni. Przeglądarki nie udostępniają siły zwrotnej (force feedback), więc kierownica pracuje ze sprężyną centrującą ze sterownika. Bez kalibracji gra zgaduje osie (skręt na osi 0, pedały na osiach, które w spoczynku stoją na końcu zakresu).
 
 ## Weekend wyścigowy
 
@@ -124,7 +156,8 @@ W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie z
 | --- | --- |
 | `js/data.js` | zespoły, kierowcy, tor Parco, kalendarz, opony, pogoda |
 | `js/track.js` | geometria toru |
-| `js/physics.js` | model jazdy bolidu |
+| `js/vehicle.js` | fizyka bolidu: opony, zawieszenie, silnik, dyferencjał, hamulce, asysty, temperatury, setup, obwiednia osiągów |
+| `js/physics.js` | bolidy: dane, kolizje, ściany, AI kierowców |
 | `js/session.js` | kwalifikacje i wyścig, przeciwnicy |
 | `js/quali.js` | kwalifikacje Q1 · Q2 · Q3 |
 | `js/pit.js` | aleja serwisowa, pit stopy, strategia AI |
@@ -139,8 +172,9 @@ W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie z
 | `js/audio.js` | dźwięk: silnik klasyczny, silniki z paczki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
 | `js/engines.js` | odtwarzanie własnych nagrań silników (synteza ziarnista w AudioWorklecie, zapasowo w wątku głównym) |
 | `js/enginepack.js` | wczytywanie własnych nagrań silników z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |
-| `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
+| `js/input.js` | pad, kierownice i pedały (kalibracja osi), wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/keys.js` | przypisanie klawiszy (zapis w ciasteczku `wgp_keys`) |
 | `js/game.js` | pętla gry |
 | `serve.py`, `start.command`, `start.bat` | lokalny serwer bez pamięci podręcznej i uruchamianie z aktualizacją |
+| `tools/veh-tests.js`, `tools/physics-bench.js` | testy fizyki w Node (przyspieszanie, hamowanie, skidpad, wyścigi AI): `node tools/veh-tests.js` |
 | `js/ui.js` | menu, HUD, kreator, ustawienia |

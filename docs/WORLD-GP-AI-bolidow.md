@@ -4,23 +4,24 @@
 
 AI bolidów w WORLD GP nie uczy się ani nie przeszukuje drzewa decyzji. Każdy bolid AI jedzie po wyliczonej raz linii jazdy z prędkością z wyliczonego raz profilu prędkości, a w każdej klatce prosty kontroler zamienia te dwie rzeczy na skręt, gaz i hamulec. Różnice między kierowcami i poziomami trudności biorą się z jednego współczynnika `skill`, który obniża przyczepność w profilu prędkości.
 
-AI steruje bolidem tymi samymi wejściami co gracz (`steer`, `throttle`, `brake`, `drsOpen`), a ruch liczy ta sama fizyka (`PG.stepCar`). Nie ma teleportacji ani „gumki” (rubber banding).
+AI steruje bolidem tymi samymi wejściami co gracz (`steer`, `throttle`, `brake`, `drsOpen`), a ruch liczy ta sama fizyka (`PG.stepCar` → `PG.Veh.step`: model na czterech kołach z oponami Pacejki, przeniesieniem obciążenia i temperaturą opon). Nie ma teleportacji ani „gumki” (rubber banding).
 
-Dokumentacja opisuje wersję gry 2026.10.15.1 w repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).
+Dokumentacja opisuje wersję gry 2026.10.22.1 w repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).
 
 | Plik | Rola w AI |
 | --- | --- |
-| `game/js/track.js` | linia jazdy (`racingLine`) i profil prędkości (`PG.speedProfile`) |
-| `game/js/session.js` | poziomy trudności (`DIFF`), `setupAI`, pętla sesji, brudne powietrze, uszkodzenia |
-| `game/js/physics.js` | kontroler `PG.aiControl`, pomoce dla AI w fizyce, `PG.resetCar` |
-| `game/js/pit.js` | strategia pit stopów (`Pit.aiPlan`, `Pit.suggest`) |
-| `game/js/racecontrol.js` | awarie, zjazd na pobocze, SC i VSC, limity prędkości |
-| `game/js/quali.js` | symulowane czasy AI w kwalifikacjach |
-| `game/js/multi.js` | multiplayer: host prowadzi AI, przejęcie bolidu |
+| `js/track.js` | linia jazdy (`racingLine`) i profil prędkości (`PG.speedProfile`) |
+| `js/vehicle.js` | model bolidu, obwiednia osiągów (`PG.Veh.envelope`), regulator skrętu AI, ABS, TC i pomoc stabilności |
+| `js/session.js` | poziomy trudności (`DIFF`), `setupAI`, pętla sesji, brudne powietrze, uszkodzenia |
+| `js/physics.js` | kontroler `PG.aiControl`, parametry bolidów, `PG.resetCar`, kolizje |
+| `js/pit.js` | strategia pit stopów (`Pit.aiPlan`, `Pit.suggest`) |
+| `js/racecontrol.js` | awarie, zjazd na pobocze, SC i VSC, limity prędkości |
+| `js/quali.js` | symulowane czasy AI w kwalifikacjach |
+| `js/multi.js` | multiplayer: host prowadzi AI, przejęcie bolidu |
 
-![Schemat AI bolidu: linia jazdy i profil prędkości liczone raz przy starcie sesji, kontroler AI 4 razy na klatkę: ruch w stawce, skręt, prędkość docelowa, wejścia bolidu](WORLD-GP-AI-schemat.png)
+![Schemat AI bolidu: linia jazdy i profil prędkości liczone raz przy starcie sesji, kontroler AI co 8 ms: ruch w stawce, skręt, prędkość docelowa, wejścia bolidu](WORLD-GP-AI-schemat.png)
 
-Górny pas liczy się raz, dolny 4 razy na klatkę dla każdego bolidu AI. Cała „inteligencja” jazdy siedzi w profilu prędkości, a kontroler tylko go realizuje.
+Górny pas liczy się raz, dolny co 8 ms (ok. 2 razy na klatkę) dla każdego bolidu AI; schemat pochodzi z wersji sprzed nowego modelu bolidu, ale podział jest ten sam. Cała „inteligencja” jazdy siedzi w profilu prędkości, a kontroler tylko go realizuje.
 
 ## 1. Linia jazdy
 
@@ -39,23 +40,31 @@ Ta sama linia jest rysowana graczowi jako podpowiedź (ustawienie „Linia jazdy
 
 ## 2. Profil prędkości
 
-Profil prędkości to tablica `profile.v[i]`: największa prędkość, z jaką dany bolid może przejechać każdy punkt linii jazdy. Liczy go `PG.speedProfile(T, p)` w `track.js`, osobno dla każdego bolidu, z jego mocy, oporu, docisku i przyczepności. Zwraca też teoretyczny czas okrążenia `lapTime`.
+Profil prędkości to tablica `profile.v[i]`: największa prędkość, z jaką dany bolid może przejechać każdy punkt linii jazdy. Liczy go `PG.speedProfile(T, p)` w `track.js`, osobno dla każdego bolidu, z jego mocy, oporu, docisku, przyczepności i setupu. Zwraca też teoretyczny czas okrążenia `lapTime`.
 
-**Krok 1. Limit w zakręcie.** Przyczepność boczna rośnie z prędkością przez docisk: a = (A0 + B·v²)·grip, gdzie A0 = 23 m/s², B = 0,0042 (stałe `PG.PHYS.latA0` i `latB`). Z równania k·v² = a wychodzi:
+**Obwiednia osiągów.** Profil nie używa już stałych `latA0`, `brkA0`, `tracA0`. Zamiast nich `PG.Veh.envelope(p)` w `vehicle.js` liczy z tego samego modelu, którym jedzie bolid (opony Pacejki z czułością na nacisk, docisk zależny od prześwitu, przeniesienie obciążenia, hamulce, V10 i skrzynia, setup), pięć tablic dla prędkości 0–110 m/s co 1 m/s:
 
-```math
-v_{\max}(i) = \sqrt{\frac{A_0 \cdot gm}{|k_i| - B \cdot gm \cdot am}}
-```
+| Tablica | Co zawiera | Jak liczona |
+| --- | --- | --- |
+| `lat` | największe przyspieszenie boczne | bisekcja: obie osie mają zapas przy bocznym przeniesieniu obciążenia (podział według stabilizatorów z setupu), tył dodatkowo przenosi siłę przeciw oporowi; przy małej prędkości korekta zmierzona na skidpadzie R = 15–50 m |
+| `brk` | największe opóźnienie z ABS | oś blokuje się na szczycie opony albo kończy się moment hamulca (balans z setupu) |
+| `trac` | największe przyspieszenie z przyczepności | 98% przyczepności tylnej osi z przeniesieniem obciążenia do tyłu |
+| `eng` | przyspieszenie z silnika | bieg automatu, krzywa momentu V10, masa zastępcza z bezwładnością kół i silnika |
+| `drag` | opóźnienie od oporu | opór powietrza i toczenia przy docisku z tej prędkości |
 
-gdzie k to krzywizna linii, gm mnożnik przyczepności, am mnożnik docisku. Gdy mianownik wychodzi ≤ 0, docisk sam utrzyma bolid i limitem jest 110 m/s (396 km/h).
+Obwiednia jest liczona raz dla zestawu parametrów i trzymana w pamięci podręcznej. Wartości pośrednie daje `PG.Veh.envAt(tablica, v)`.
 
-**Krok 2. Hamowanie (przebieg wstecz).** Od końca okrążenia do początku: prędkość w punkcie `a` nie może przekroczyć prędkości, z której da się wyhamować do punktu `b` na odcinku `ds`. Opóźnienie to hamulce (`brkA0` = 10, `brkB` = 0,0045, z dociskiem) plus opór powietrza `cd·v²`.
+**Krok 1. Limit w zakręcie.** Największa prędkość, przy której `lat(v) ≥ |k|·v²` (bisekcja), gdzie k to krzywizna linii. Gdy docisk utrzyma bolid przy każdej prędkości, limitem jest 110 m/s (396 km/h).
 
-**Krok 3. Przyspieszenie (przebieg w przód).** Od początku do końca: prędkość w kolejnym punkcie nie może przekroczyć tego, co bolid zdąży osiągnąć. Przyspieszenie to mniejsza z wartości: trakcja (`tracA0` = 12, `tracB` = 0,002) albo moc / v, minus opór.
+**Krok 2. Hamowanie (przebieg wstecz).** Od końca okrążenia do początku: prędkość w punkcie `a` nie może przekroczyć prędkości, z której da się wyhamować do punktu `b` na odcinku `ds`. Opóźnienie to `brk(v) × brakeMul × lonAvail + drag(v)`.
 
-**Koło tarcia.** W krokach 2 i 3 hamowanie i trakcja są mnożone przez `lonAvail(k, v)`: część przyczepności wzdłużnej, która zostaje przy danym skręcie. Bolid nie może więc jednocześnie w pełni hamować i w pełni skręcać. Stała `comb` = 1,2 ogranicza sumę: √(boczne² + wzdłużne²) ≤ 1,2.
+**Krok 3. Przyspieszenie (przebieg w przód).** Od początku do końca: prędkość w kolejnym punkcie nie może przekroczyć tego, co bolid zdąży osiągnąć. Przyspieszenie to `min(trac(v) × lonAvail, eng(v)) − drag(v)`.
 
-Oba przebiegi wykonują się dwa razy po 2N próbek, żeby domknąć okrążenie. Wynik to wykres prędkości z płaskimi prostymi, liniowymi rampami hamowania przed zakrętami i dołkami w zakrętach. Ten wykres jest „planem jazdy” każdego bolidu AI.
+**Koło tarcia.** `lonAvail(k, v) = √(1 − u²)`, gdzie `u = k·v² / lat(v)` to wykorzystana część przyczepności bocznej. Bolid nie może więc jednocześnie w pełni hamować i w pełni skręcać, tak jak w fizyce.
+
+Oba przebiegi wykonują się dwa razy po 2N próbek, żeby domknąć okrążenie. Wynik to wykres prędkości z płaskimi prostymi, rampami hamowania przed zakrętami i dołkami w zakrętach. Ten wykres jest „planem jazdy” każdego bolidu AI.
+
+Ta sama obwiednia daje też `car.maxCurv` (największą krzywiznę przy obecnej prędkości i przyczepności opon), z której korzysta skręt AI i asysta kierownicy gracza, oraz liczby w ekranie setupu (prędkość maksymalna, przyczepność boczna, hamowanie, czas idealnego okrążenia).
 
 ## 3. Poziom trudności i umiejętność kierowcy
 
@@ -78,43 +87,66 @@ Prędkość w zakręcie rośnie mniej więcej z pierwiastkiem przyczepności, wi
 Skąd jeszcze biorą się różnice między bolidami AI:
 
 - **Bolid zespołu** (`PG.carParams` w `physics.js`): moc z atrybutu `power` i silnika, docisk i opór z `aero`, przyczepność z `aero` i `tyre`, zużycie opon z `tyre` zespołu i kierowcy.
-- **Start**: czas reakcji `0,16 + (100 − start) × 0,006 + losowo 0–0,12` s oraz `launchBoost` (trakcja ×0,9–1,05 przez pierwsze 3 s) z atrybutu `start`.
+- **Start**: czas reakcji `0,16 + (100 − start) × 0,006 + losowo 0–0,12` s oraz `launchBoost` (przyczepność tylnych opon × 0,9–1 przez pierwsze 3 s) z atrybutu `start`.
+- **Setup**: profil liczy się z setupu bolidu. AI jeździ na domyślnym, gracz na swoim zapisanym dla toru.
 - **Bolid gracza prowadzony przez AI** (tryb auto, po mecie, przejęcie w multiplayer) dostaje `skill` co najmniej 0,95.
 
-**Kwalifikacje.** AI nie jedzie okrążeń kwalifikacyjnych. `PG.simQualiTime` liczy profil na nowych miękkich oponach (na mokrym: deszczowe) i zwraca `lapTime × 1,005 + losowo 0–0,35 s`. `quali.js` dodaje lekkie przyspieszanie toru w kolejnych segmentach.
+**Kwalifikacje.** AI nie jedzie okrążeń kwalifikacyjnych. `PG.simQualiTime` liczy profil na nowych miękkich oponach (na mokrym: deszczowe) i zwraca `lapTime × 1,032 + losowo 0–0,35 s`. Mnożnik 1,032 to zmierzona różnica między idealnym profilem a okrążeniem AI na pełnej fizyce (temperatura opon, regulator, korekty z rozdziału 4). `quali.js` dodaje lekkie przyspieszanie toru w kolejnych segmentach.
 
 ## 4. Kontroler AI krok po kroku
 
-`PG.aiControl(car, T, cars, env, dt)` w `physics.js` wywołuje się dla każdego bolidu AI 4 razy na klatkę (pętla sesji dzieli krok na 4 podkroki). Ustawia skręt, gaz, hamulec i DRS, a potem fizyka przesuwa bolid.
+`PG.aiControl(car, T, cars, env, dt)` w `physics.js` ustawia skręt, gaz, hamulec i DRS. Pętla sesji liczy fizykę co 2 ms, a decyzje AI co 8 ms (przy 60 kl./s to ok. 2 razy na klatkę). Między decyzjami skręt i tak jest regulowany w każdym kroku fizyki przez `vehicle.js` (rozdział 4.2).
 
-### 4.1 Skręt: podążanie za punktem przed bolidem
+### 4.1 Skręt: krzywizna z linii jazdy
 
-To metoda „pure pursuit”, znana z robotyki:
+`car.steer` u AI nie jest kątem kierownicy, tylko żądaną krzywizną toru jazdy jako ułamkiem `maxCurv`. Krzywiznę liczą dwie metody:
 
-1. Punkt celu leży na linii jazdy `look` metrów przed bolidem: `look = 9 + 0,32 × v` m (v w m/s). Przy 100 km/h to ok. 18 m, przy 300 km/h ok. 36 m. Szybciej = dalej, więc bez nerwowego wężykowania.
-2. Do punktu dodawane jest przesunięcie boczne `car.offset` (wyprzedzanie, rozdział 5), obcięte tak, by cel był co najmniej 2,2 m od krawędzi.
-3. Kąt `ang` między kierunkiem ruchu bolidu (kurs + kąt znoszenia `beta`) a kierunkiem do celu.
-4. Krzywizna łuku przez cel: `curv = 2 × sin(ang) / dist`.
-5. `steer = curv / maxCurv`, obcięte do ±1. `maxCurv` to największa krzywizna, jaką bolid przejedzie przy obecnej prędkości i przyczepności (liczy ją fizyka). Dzięki temu wartość skrętu oznacza ułamek przyczepności, tak jak u gracza.
+1. **Pure pursuit** (daleko od linii, np. po wyjeździe z toru). Punkt celu leży na linii jazdy `look = 12 + 0,36 × v` m przed bolidem (v w m/s), z przesunięciem bocznym `car.offset` (rozdział 5), obciętym tak, by cel był co najmniej 2,2 m od krawędzi. Krzywizna łuku przez cel: `curv = 2 × sin(ang) / max(dist, 4)`, gdzie `ang` to kąt między kierunkiem ruchu bolidu (kurs + kąt znoszenia) a kierunkiem do celu.
+2. **Śledzenie linii** (blisko linii: odchyłka boczna `ey` < 3 m, odchyłka kursu `eh` < 0,35 rad, v > 6 m/s). Krzywizna linii z wyprzedzeniem plus korekta odchyłek:
 
-### 4.2 Gaz i hamulec: trzymanie prędkości z profilu
+```math
+curv = k_{ff} + \frac{e_y}{L_p^2} + \frac{1{,}6 \cdot \sin(e_h)}{L_p}, \qquad L_p = 7 + 0{,}22 \cdot v
+```
 
-1. Prędkość docelowa to wartość profilu w punkcie `4 + 0,12 × v` m przed bolidem (przy 300 km/h: 14 m), razy `ai.pace` (domyślnie 1).
-2. Korekta za opony i pogodę: × √(obecna przyczepność opon / przyczepność przy budowie profilu). Zużyte opony = wolniej w zakrętach.
-3. Korekta za brudne powietrze i ruch w stawce (rozdział 5), limit samochodu bezpieczeństwa `rcCap` (rozdział 9). Poza torem (`|lat| > hw + 0,5`) najwyżej 30 m/s (108 km/h).
-4. Regulator z martwą strefą:
+`k_ff` to średnia krzywizna linii z trzech próbek `1 + 0,06 × v` m przed bolidem. Przy granicach (`ey` 1,5–3 m, `eh` 0,2–0,35 rad) obie metody są płynnie mieszane. Czyste pure pursuit ścinało zmiany krzywizny i spóźniało obrót na wyjściach z zakrętów.
+
+3. `steer = curv / maxCurv`, obcięte do ±1.
+
+### 4.2 Skręt w fizyce: regulator prędkości odchylania
+
+W `vehicle.js`, w każdym kroku 2 ms, żądana krzywizna `kc = steer × maxCurv` zamienia się na kąt kół:
+
+```math
+\delta = k_c \cdot L + I + 2{,}2 \cdot L \cdot (k_c - r / v), \qquad \dot I = 8 \cdot L \cdot (k_c - r / v), \quad |I| \le 0{,}12
+```
+
+gdzie L to rozstaw osi, a r prędkość odchylania. Do tego:
+
+- **Kontra przy nadsterowności:** gdy kąt znoszenia tylnej osi przekracza szczyt opony, kąt kół rośnie o `1,2 × nadmiar` w stronę kontry. Sama prędkość odchylania tego nie widzi, bo bolid w poślizgu „płynie” bokiem, a r rośnie powoli.
+- **Limit podsterowności:** kąt kół jest ograniczony do kierunku ruchu przedniej osi ± 1,05 × kąt szczytu przedniej opony. Skręcanie dalej niż szczyt nic nie daje, tylko grzeje i zużywa opony.
+
+### 4.3 Gaz i hamulec: trzymanie prędkości z profilu
+
+1. Prędkość docelowa to wartość profilu w punkcie `2 + 0,05 × v` m przed bolidem, razy `ai.pace` (domyślnie 1).
+2. **Korekta za opony i pogodę:** `gr = przyczepność opon teraz / przy budowie profilu × min(1, gripT)`, gdzie `gripT` to współczynnik temperatury opon słabszej osi. W zakrętach, strefach hamowania i gdy `gr > 1` cel mnoży się przez √gr. Zimne, przegrzane albo zużyte opony = wolniej w zakrętach.
+3. Korekta za brudne powietrze (rozdział 5.3).
+4. **Wcześniejsze hamowanie.** Profil zakłada pełne hamowanie w czystym powietrzu na dobrych oponach. Gdy skuteczność `fB` jest mniejsza, AI hamuje wcześniej: `v² = vmin² + fB × (vp² − vmin²)`, gdzie `vmin` to najmniejsza prędkość profilu na drodze hamowania (`v² / 24` m, najwyżej 260 próbek). `fB` to iloczyn: `min(1, gr)`, utraty docisku w brudnym powietrzu, 0,93 w ciasnej stawce (rywal bliżej niż 40 m) i do 0,8 przy jeździe poza linią (trzeba jeszcze skręcać na hamowaniu).
+5. **Poza linią po wewnętrznej** (wyprzedzanie, unikanie) promień jest mniejszy niż w profilu: cel × √(max(0,5, 1 − k × Δ)), gdzie Δ to odległość od linii.
+6. **Poza asfaltem** (`|lat| > hw + 0,5`) bolid łagodnie zwalnia: cel nie niżej niż 30 m/s i najwyżej 0,5 m/s poniżej obecnej prędkości, hamulec najwyżej 0,35. Gwałtowne hamowanie na krawężniku w zakręcie kończyło się obrotem.
+7. Limity z ruchu w stawce (`cap`, rozdział 5) i samochodu bezpieczeństwa (`rcCap`, rozdział 9).
+8. Regulator z martwą strefą:
 
 | Sytuacja | Gaz | Hamulec |
 | --- | --- | --- |
-| v < cel − 0,3 m/s | `min(1, (cel − v) / 2,5 + 0,4)` | 0 |
-| v > cel + 0,6 m/s | 0 | `min(1, (v − cel) / 4)` |
-| pomiędzy | 0,35 | 0 |
+| v < cel − 0,2 m/s | `min(1, (cel − v) / 1,5 + 0,5)` | 0 |
+| v > cel + 0,4 m/s | 0 | `min(1, (v − cel) / 1,5)`, poza torem najwyżej 0,35 |
+| pomiędzy | 0,4 | 0 |
 
-Bo profil ma już wbudowane hamowanie (rozdział 2), AI nie musi przewidywać zakrętów: wystarczy, że trzyma się prędkości z profilu kilkanaście metrów przed sobą.
+Pełny hamulec i pełny gaz nie wywracają bolidu, bo AI zawsze ma ABS, kontrolę trakcji i pomoc stabilności w kole tarcia (rozdział 6). Bo profil ma już wbudowane hamowanie (rozdział 2), AI nie musi przewidywać zakrętów: wystarczy, że trzyma się prędkości z profilu kilka metrów przed sobą.
 
-### 4.3 DRS
+### 4.4 DRS
 
-AI otwiera DRS, gdy ma do niego prawo (`drsAllowed`: strata do bolidu przed nim poniżej 1,0 s w punkcie pomiaru, ta sama zasada co dla gracza), jest w strefie DRS, skręt jest w granicach ±0,3 i nie hamuje. Każde z tych zdarzeń zamyka klapę w następnym podkroku.
+AI otwiera DRS, gdy ma do niego prawo (`drsAllowed`: strata do bolidu przed nim poniżej 1,0 s w punkcie pomiaru, ta sama zasada co dla gracza), jest w strefie DRS, `steer` jest w granicach ±0,3 i nie hamuje. Każde z tych zdarzeń zamyka klapę przy następnej decyzji.
 
 ## 5. Ruch w stawce: wyprzedzanie, jazda za rywalem, aerodynamika
 
@@ -122,17 +154,32 @@ AI wyprzedza, zjeżdżając z linii jazdy o 5 m w bok od rywala, a gdy nie ma mi
 
 ### 5.1 Decyzja o wyprzedzaniu
 
-Na początku każdego wywołania `aiControl` przegląda wszystkie bolidy. Rywal jest „na drodze”, gdy jest 0–34 m przed nim po osi toru i różnica pozycji bocznej jest mniejsza niż 4,4 m. Wtedy:
+Na początku każdego wywołania `aiControl` przegląda wszystkie bolidy (poza wycofanymi i „duchami” po resecie). Rywal jest „na drodze”, gdy jest 0–34 m przed nim po osi toru i różnica pozycji bocznej jest mniejsza niż 4,4 m, liczona do obecnej pozycji AI albo do toru, na który AI zaraz wróci (przesunięcie ograniczone przed zakrętem, patrz niżej). Wtedy:
 
 1. AI sprawdza, czy jest szybsze: obecna prędkość większa od rywala o 0,3 m/s albo prędkość z profilu w tym miejscu większa o 1,5 m/s.
 2. Wybiera stronę, po której przy rywalu jest więcej miejsca do krawędzi (`roomR = hw − o.lat`, `roomL = o.lat + hw`), i zapamiętuje ją w `ai.side`, żeby nie przeskakiwać z boku na bok.
 3. Docelowe przesunięcie = pozycja rywala ± 5,0 m, liczone względem linii jazdy.
 
-Gdy nikogo nie ma na drodze, `ai.side` się zeruje, a cel wraca do 0, czyli na linię jazdy. Przesunięcie zmienia się płynnie: `offset += (cel − offset) × min(1, 1,6 × dt)`, co daje zjazd w bok w ok. 0,6 s.
+**Przed zakrętem i w zakręcie AI trzyma się linii.** Inny tor jazdy przy prędkości z profilu wynosi bolid z toru, więc przesunięcie jest ograniczone według największej krzywizny na odcinku `20 + 1,2 × v` m przed bolidem:
+
+| Krzywizna przed bolidem | Najwyższe przesunięcie | Tempo zmiany przesunięcia |
+| --- | --- | --- |
+| promień < 250 m | 1,5 m | 3 / s |
+| promień 250–600 m | 3 m | 3 / s |
+| prosta lub łagodny łuk | bez limitu | 1,6 / s |
+
+Przesunięcie zmienia się płynnie: `offset += (cel − offset) × min(1, tempo × dt)`. Gdy nikogo nie ma na drodze, `ai.side` się zeruje, a cel wraca do 0, czyli na linię jazdy.
+
+**Bolid obok.** Gdy rywal zachodzi na AI (±7 m wzdłuż toru, mniej niż 4 m w bok, jedzie szybciej niż 3 m/s), AI nie zjedzie na niego bokiem: cel przesunięcia jest obcięty tak, by zostało co najmniej 2,5 m odstępu do jego pozycji. Gdy rywale są po obu stronach, AI jedzie środkiem między nimi. Jeśli bolid obok jest z przodu o ponad 1,5 m, AI odpuszcza i chowa się za nim (prędkość docelowa najwyżej `o.v − 1,5` m/s). Ta zasada ograniczyła kontakty na pierwszym okrążeniu, zwłaszcza w szykanach.
 
 ### 5.2 Jazda za rywalem
 
-Gdy rywal jest bliżej niż 11 m i różnica boczna jest mniejsza niż 3,4 m (AI nie zdążyło jeszcze zjechać obok), prędkość docelowa jest ograniczona do 98,5% prędkości rywala, a poniżej 7 m do 90%. To chroni przed najechaniem na tył. Kolizje i tak są liczone przez `PG.collide`, a uszkodzenia z kontaktu dwóch bolidów AI są mnożone przez 0,6 („AI między sobą ostrożniejsze”).
+- **Odstęp:** gdy rywal jest bliżej niż 11 m i różnica boczna jest mniejsza niż 3,4 m (AI nie zdążyło jeszcze zjechać obok), prędkość docelowa jest ograniczona do 98,5% prędkości rywala, a poniżej 7 m do 90%. Przy objeżdżaniu bardzo wolnego bolidu (poniżej 8 m/s) AI nie zwalnia poniżej 6 m/s.
+- **Rywal hamuje:** gdy hamuje (hamulec > 0,2) i jest wolniejszy, w zasięgu 34 m i 3 m w bok, AI zostawia sobie drogę hamowania: `cel ≤ √(o.v² + 2 × 18 × max(0, d − 8))`.
+- **Bardzo wolny bolid przed nami** (obrót, uszkodzenie: wolniejszy niż 60% prędkości AI i niż 20 m/s, do 3,2 m w bok): to samo z opóźnieniem 20 m/s² i zasięgiem `12 + v² / 40` m, czyli całą drogą hamowania.
+- **Ciasna stawka:** rywal bliżej niż 40 m i 3 m w bok → AI hamuje do zakrętów odrobinę wcześniej (`fB × 0,93`, rozdział 4.3).
+
+Kolizje i tak są liczone przez `PG.collide`, a uszkodzenia z kontaktu dwóch bolidów AI są mnożone przez 0,6 („AI między sobą ostrożniejsze”).
 
 ### 5.3 Brudne powietrze i tunel aerodynamiczny
 
@@ -141,32 +188,33 @@ Funkcja `slipstream` w `session.js` liczy dla każdego bolidu dwie wartości z b
 | Efekt | Zasięg | Siła | Skutek |
 | --- | --- | --- | --- |
 | Tunel (`slip`) | 4–36 m przed, ±3,2 m w bok | opór × (1 − 0,3 × (1 − d/36)), do −30% tuż za rywalem | szybciej na prostych |
-| Brudne powietrze (`dirty`) | 3–35 m przed, ±3,5 m w bok | waga 0–1, docisk × (1 − 0,22 × dirty) | wolniej w zakrętach |
+| Brudne powietrze (`dirty`) | 3–35 m przed, ±3,5 m w bok | waga 0–1; docisk przodu × (1 − 0,26 × dirty), tyłu × (1 − 0,14 × dirty) | wolniej w zakrętach, podsterowność |
 
-Fizyka działa tak samo na gracza i AI. AI dodatkowo obniża prędkość docelową w zakręcie, gdy wykorzystuje ponad 30% przyczepności i jedzie w brudnym powietrzu. Bez tej korekty AI wjeżdżałoby w zakręt za szybko, bo profil liczono w czystym powietrzu. Efekt: tak jak w F1, AI łatwo dogania rywala na prostej, ale trudno mu jechać tuż za nim w zakrętach.
+Fizyka działa tak samo na gracza i AI. Przód traci więcej docisku niż tył, więc za rywalem bolid wyraźnie podsterowuje. AI dodatkowo obniża prędkość docelową w zakręcie, gdy wykorzystuje ponad 30% przyczepności i jedzie w brudnym powietrzu, oraz hamuje wcześniej (rozdział 4.3). Bez tej korekty AI wjeżdżałoby w zakręt za szybko, bo profil liczono w czystym powietrzu. Efekt: tak jak w F1, AI łatwo dogania rywala na prostej, ale trudno mu jechać tuż za nim w zakrętach.
 
-## 6. Pomoce i uproszczenia AI w fizyce
+## 6. Pomoce AI w fizyce
 
-AI jedzie tą samą fizyką co gracz, ale z kilkoma pomocami, które chronią je przed obrotem i wypadnięciem z toru. Bez nich prosty kontroler z rozdziału 4 nie poradziłby sobie z granicą przyczepności.
+AI jedzie tą samą fizyką co gracz: cztery koła z oponami Pacejki, przeniesienie obciążenia, zawieszenie, temperatura i zużycie opon, uszkodzenia. Nie ma już dodatkowej przyczepności odciążonej osi (dawne `kF`, `kR`), hamowania liczonego z krzywizny linii (`ulB`) ani udawanych blokad kół (`aiLockT`). AI może więc naprawdę stracić bolid, a chronią je te same pomoce, które gracz może włączyć w ustawieniach, w najmocniejszej wersji.
 
 | Mechanizm | Gracz | AI | Gdzie |
 | --- | --- | --- | --- |
-| ABS i kontrola trakcji | według ustawień | zawsze włączone | `session.js`, `absOn`, `tcOn` |
-| Skrzynia biegów | automatyczna albo ręczna, według ustawień | zawsze automatyczna | `session.js`, `manual`; `physics.js`, `gearPower` |
-| Przeniesienie obciążenia | hamowanie dociąża przód, gaz tył, odciążona oś traci przyczepność | odciążona oś nie traci przyczepności (`kF`, `kR` ≥ 1) | `physics.js`, „pomoc stabilności” |
-| Hamowanie w zakręcie | ABS liczy z obecnego skrętu | ABS liczy z krzywizny linii jazdy, tak jak profil prędkości | `physics.js`, `ulB` |
-| Blokada kół | wpływa na jazdę i płaszczy opony | tylko efekt: 7% szans przy mocnym hamowaniu, 0,2–0,6 s dymu i dźwięku | `physics.js`, `aiLockT` |
-| Kontra w poślizgu | pomoc przy kontrze | brak, AI nie wpada w poślizg | `physics.js` |
+| ABS | według ustawień: limit momentu z modelu opony przy poślizgu ok. 0,9 szczytu i modulator ciśnienia na każde koło | zawsze: siła hamowania z koła tarcia (0,97 przyczepności, której nie zużywa siła boczna przy obecnym kącie znoszenia), ten sam modulator | `vehicle.js`, `absOn` |
+| Kontrola trakcji | poziom 0–3 (1–2: limit łącznego poślizgu, 3: koło tarcia) | zawsze jak poziom 3, z zapasem momentu na rozpędzenie kół i silnika | `vehicle.js`, `tcOn`, `tcLvl` |
+| Pomoc stabilności | według ustawień | zawsze: mniej gazu, gdy bolid obraca się szybciej, niż wynika z toru jazdy, albo kąt znoszenia tyłu przekracza 1,25 szczytu opony | `vehicle.js`, `stabOn` |
+| Skręt | kierownica wprost albo pad z asystą (pełne wychylenie = szczyt przedniej opony + 20%), opcjonalnie pomoc kontry | regulator prędkości odchylania z kontrą od kąta tyłu i limitem na szczycie przedniej opony (rozdział 4.2) | `vehicle.js` |
+| Skrzynia biegów | automatyczna albo ręczna, według ustawień | zawsze automatyczna | `session.js`, `manual` |
+| Setup | własny, zapisany dla toru | domyślny | `session.js`, `setup` |
 
-Punkt „hamowanie w zakręcie” jest ważny: profil prędkości zakłada, że hamowanie dzieli przyczepność z krzywizną linii. Gdyby fizyka liczyła ją z chwilowego skrętu (który przy wejściu w zakręt jest większy), AI hamowałoby słabiej niż w planie i wypadało z toru.
+Koło tarcia w ABS i TC to odpowiednik idealnie dozowanego hamulca i gazu: profil prędkości zakłada, że hamowanie i przyspieszenie dzielą przyczepność ze skrętem, i fizyka daje AI dokładnie tę część, której nie zużywa siła boczna.
 
-**Start.** Przed zgaszeniem świateł AI stoi na hamulcu. Po starcie czeka swój czas reakcji (rozdział 3), potem przejmuje kontroler. Falstart może popełnić tylko gracz.
+**Start.** Przed zgaszeniem świateł AI stoi na hamulcu. Po starcie czeka swój czas reakcji (rozdział 3), potem przejmuje kontroler. Przez pierwsze 3 s przyczepność tylnych opon mnoży `launchBoost` z atrybutu `start`. Falstart może popełnić tylko gracz.
 
 ## 7. Odporność: utknięcie, wyjazd z toru, uszkodzenia
 
 Gdy coś pójdzie nie tak, AI ma trzy zabezpieczenia: limit prędkości poza torem, reset po utknięciu i wolniejszy profil po uszkodzeniu.
 
-- **Poza torem.** Gdy bolid jest dalej niż 0,5 m za krawędzią, prędkość docelowa spada do 30 m/s (108 km/h). Kontroler skrętu i tak celuje w linię jazdy, więc bolid wraca na tor.
+- **Poza torem.** Gdy bolid jest dalej niż 0,5 m za krawędzią, łagodnie zwalnia do najwyżej 30 m/s (108 km/h) z hamulcem do 0,35 (rozdział 4.3). Kontroler skrętu i tak celuje w linię jazdy, więc bolid wraca na tor.
+- **Poślizg.** Kontra od kąta tyłu w regulatorze skrętu i pomoc stabilności łapią większość poślizgów (rozdział 4.2 i 6). Gdy bolid mimo to się obróci, AI za nim hamuje na czas (rozdział 5.2).
 - **Utknięcie.** Od 6. sekundy wyścigu bolid AI jadący wolniej niż 3 m/s przez ponad 3 s jest resetowany (`PG.resetCar`): 10 m wstecz na linię jazdy, prosto, 8 m/s, bez przesunięcia bocznego. Przez 2,5 s jest „duchem” (`ghost`), żeby nie zderzył się z nadjeżdżającymi. Reset nie naprawia uszkodzeń.
 - **Uszkodzenia.** Po każdym uszkodzeniu `flushDamage` w `session.js` sprawdza, czy zmienił się wpływ na osiągi (moc, opór, docisk, przyczepność z `PG.dmgPerf`). Jeśli tak, najwyżej co 0,5 s przebudowuje profil prędkości (`rebuildProfile`). Bolid z urwanym skrzydłem zaczyna więc hamować wcześniej i wolniej jechać zakręty, zamiast wypadać z toru.
 - **Decyzja po uszkodzeniu.** W trybie pełnych uszkodzeń bolid AI odpada z wyścigu, gdy suma uszkodzeń przekracza 0,6, silnik jest zniszczony albo oba przednie zawieszenia są zniszczone. Lżej uszkodzony bolid przechodzi przez strategię pit stopów (rozdział 8), która może wezwać go po nowe skrzydło.
@@ -226,7 +274,7 @@ W multiplayerze wszystkie bolidy AI prowadzi host, a pozostali gracze dostają i
 
 ## 11. Parametry do strojenia
 
-Największy wpływ na siłę AI ma `DIFF` w `session.js`. Pozostałe stałe zmieniają charakter jazdy, a nie tempo, więc warto je ruszać pojedynczo i sprawdzać w wyścigu.
+Największy wpływ na siłę AI ma `DIFF` w `session.js`. Pozostałe stałe zmieniają charakter jazdy, a nie tempo, więc warto je ruszać pojedynczo i sprawdzać w wyścigu, najlepiej narzędziem `tools/physics-bench.js` (wyścig bez przeglądarki, liczy DNF, resety, czas poza torem i czasy okrążeń).
 
 | Parametr | Plik | Wartość | Co zmienia |
 | --- | --- | --- | --- |
@@ -234,13 +282,20 @@ Największy wpływ na siłę AI ma `DIFF` w `session.js`. Pozostałe stałe zmie
 | wpływ `pace` na `skill` | `session.js` | 0,0032 na punkt | rozrzut tempa między kierowcami |
 | limit `skill` | `session.js` | 0,995 | najszybszy możliwy kierowca AI |
 | `brakeMul` w profilu AI | `session.js` | 0,97 | zapas na hamowaniu (mniej = ostrożniej) |
-| odległość celu skrętu | `physics.js` | 9 + 0,32 × v m | płynność skrętu (mniej = ciaśniej, ale nerwowo) |
-| podgląd prędkości | `physics.js` | 4 + 0,12 × v m | jak wcześnie AI reaguje na hamowanie z profilu |
+| mnożnik czasu kwalifikacji | `session.js`, `simQualiTime` | 1,032 | symulowane czasy AI względem idealnego profilu |
+| odległość celu skrętu | `physics.js` | 12 + 0,36 × v m | płynność skrętu daleko od linii |
+| śledzenie linii, `Lp` | `physics.js` | 7 + 0,22 × v m | jak mocno AI wraca na linię (mniej = ciaśniej, ale nerwowo) |
+| regulator odchylania | `vehicle.js` | wzmocnienie 2,2, całka 8, limit ±0,12 rad | jak dokładnie bolid realizuje krzywiznę |
+| kontra przy nadsterowności | `vehicle.js` | 1,2 × nadmiar kąta tyłu | jak szybko AI łapie poślizg tyłu |
+| podgląd prędkości | `physics.js` | 2 + 0,05 × v m | jak wcześnie AI reaguje na hamowanie z profilu |
+| ciasna stawka | `physics.js` | `fB` × 0,93 do 40 m | zapas na hamowaniu w grupie |
 | strefa wykrycia rywala | `physics.js` | 34 m, ±4,4 m | jak wcześnie AI zaczyna wyprzedzanie |
 | odstęp boczny przy wyprzedzaniu | `physics.js` | 5,0 m | jak szeroko AI omija rywala |
-| tempo zjazdu w bok | `physics.js` | 1,6 / s | jak gwałtownie AI zmienia linię |
+| przesunięcie przy zakręcie | `physics.js` | 1,5 m (R < 250 m), 3 m (R < 600 m) | ile AI zjeżdża z linii przed zakrętem |
+| tempo zjazdu w bok | `physics.js` | 3 / s przy zakręcie, 1,6 / s na prostej | jak gwałtownie AI zmienia linię |
+| bolid obok | `physics.js` | ±7 m, odstęp 2,5 m | kontakty bokiem, zwłaszcza na 1. okrążeniu |
 | limit za rywalem | `physics.js` | 98,5% (< 11 m), 90% (< 7 m) | ryzyko najechania na tył |
-| utrata docisku w brudnym powietrzu | `physics.js`, `PHYS.dirty` | 0,22 | trudność jazdy tuż za rywalem (gracz i AI) |
+| utrata docisku w brudnym powietrzu | `physics.js`, `PHYS.dirtyF`, `dirtyR` | 0,26 / 0,14 | trudność jazdy tuż za rywalem (gracz i AI) |
 | odstęp linii od krawędzi | `track.js` | 1,6 m | jak blisko krawędzi jeździ AI |
 | próg zużycia opon | `pit.js` | 0,66–0,76 | kiedy AI zjeżdża do boksu |
 | częstość awarii | `racecontrol.js` | 1/45 000, 1/15 000 na s | jak często są SC i VSC |
@@ -248,5 +303,7 @@ Największy wpływ na siłę AI ma `DIFF` w `session.js`. Pozostałe stałe zmie
 Znane ograniczenia, które warto rozważyć przy rozwoju:
 
 - AI nie broni pozycji ani nie wybiera momentu ataku (`ai.attack` jest nieużywane).
-- Wszystkie bolidy AI jadą po jednej linii jazdy i nie popełniają błędów poza kosmetycznymi blokadami kół.
+- Wszystkie bolidy AI jadą po jednej linii jazdy i na domyślnym setupie.
+- AI może wpaść w poślizg i wyjechać z toru, ale nie popełnia celowych błędów (np. spóźnionego hamowania pod presją).
+- Mnożnik czasu kwalifikacji 1,032 zmierzono na Monzy; na torach z inną proporcją zakrętów do prostych symulowane czasy mogą się różnić o kilka dziesiątych.
 - Pętla wyprzedzania przegląda wszystkie bolidy, więc koszt rośnie z kwadratem liczby bolidów (przy obecnej stawce to bez znaczenia).
