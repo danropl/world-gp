@@ -196,7 +196,7 @@
     function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
     var bb = T.bbox, M = 260;
     var x0 = bb.minx - M, y0 = bb.miny - M, w = bb.maxx - bb.minx + 2 * M, h = bb.maxy - bb.miny + 2 * M;
-    var count = Math.round(w * h / 38 * (T.def.trees || 1));
+    var count = Math.round(w * h / 38 * (T.def.trees !== undefined ? T.def.trees : 1));
     var sc = this.scenery;
     for (var k = 0; k < count; k++) {
       var x = x0 + rnd() * w, y = y0 + rnd() * h;
