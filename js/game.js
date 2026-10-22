@@ -75,7 +75,11 @@
     PG.Store.save();
     // w trakcie sesji: nowe ustawienia od razu w bolidzie gracza (dozwolone w kwalifikacjach, przed startem i w boksie)
     var p = G.S && G.S.player;
-    if (p && !(track && track !== G.trackId())) { PG.setCarSetup(p, setup); p.bbAdj = 0; }
+    if (p && !(track && track !== G.trackId())) {
+      PG.setCarSetup(p, setup); p.bbAdj = 0;
+      // profil prędkości (podpowiedź hamowania na linii, jazda automatyczna, wyjazd z alei) z nowego setupu
+      if (PG.rebuildProfile && G.S.T) PG.rebuildProfile(p, G.S.T, !!(G.S.env && G.S.env.dmgFull));
+    }
   };
   G.setupAllowed = function () {
     var S = G.S, p = S && S.player;
@@ -395,8 +399,7 @@
     }
     var W = PG.Wheel;
     if (W) {
-      var wst = PG.Store.data.settings;
-      W.setCfg(wst.wheel || null); W.rot = wst.wheelRot; W.lock = wst.wheelLock;
+      G.applyWheelSettings();
       W.onChange = function (on, name) {
         if (on) G.note('Podłączono kierownicę: ' + name + (W.calibrated ? '' : ' · skalibruj ją w Ustawieniach → Kierownica i pedały'));
         else {
@@ -453,10 +456,17 @@
   // Wejście do fizyki: klawiatura/dotyk + pad (jeden obiekt, bez alokacji co klatkę)
   var NOINPUT = {};
   G.inp = { up: false, down: false, left: false, right: false, drs: false, steerAxis: null, throttleAxis: null, brakeAxis: null, analog: false, wheel: false };
+  // kalibracja i kąt obrotu kierownicy z ustawień (start, usunięcie zapisu gry)
+  G.applyWheelSettings = function () {
+    var W = PG.Wheel, wst = PG.Store.data.settings;
+    if (!W) return;
+    W.setCfg(wst.wheel || null); W.rot = wst.wheelRot || 900; W.lock = wst.wheelLock || 360;
+  };
   G.readInput = function () {
     var I = G.input, o = G.inp, P = PG.Pad;
     o.up = !!I.up; o.down = !!I.down; o.left = !!I.left; o.right = !!I.right; o.drs = !!I.drs;
     o.steerAxis = null; o.throttleAxis = null; o.brakeAxis = null; o.analog = false;
+    if (o.up || o.down || o.left || o.right) G.kbAct = now(); // klawiatura albo przyciski dotykowe
     if (P && P.connected && !G.padErr) {
       o.steerAxis = fin(P.steer, 0); o.throttleAxis = fin(P.throttle, 0); o.brakeAxis = fin(P.brake, 0); o.analog = true;
       // ✕ zatwierdza też w menu: po wznowieniu DRS z pada dopiero po puszczeniu przycisku
@@ -466,10 +476,10 @@
       if (P.held('dright')) o.right = true;
       if (o.throttleAxis > 0.05 || o.brakeAxis > 0.05 || o.steerAxis > 0.1 || o.steerAxis < -0.1) G.padUsed = true;
     }
-    // kierownica: steruje, gdy jej używano ostatnio (pad leżący obok jej nie wyłącza i odwrotnie)
+    // kierownica: steruje, gdy ją poruszono później niż pad i klawiaturę (podłączona, ale nieużywana nie przejmuje jazdy)
     var W = PG.Wheel;
     o.wheel = false;
-    if (W && W.active && !G.padErr && (!(P && P.connected) || W.lastAct >= (P.lastAct || 0))) {
+    if (W && W.active && !G.padErr && W.lastAct > 0 && W.lastAct > (P && P.connected ? (P.lastAct || 0) : 0) && W.lastAct > (G.kbAct || 0)) {
       o.steerAxis = W.steer; o.throttleAxis = W.throttle; o.brakeAxis = W.brake; o.analog = true; o.wheel = true;
     }
     return o;

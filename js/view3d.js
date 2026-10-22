@@ -801,14 +801,14 @@
       if (!isFinite(a)) a = 0;
       rec.acc += (Math.max(-60, Math.min(30, a)) - rec.acc) * damp(8, dt);
       var pitchT, rollT;
-      if (c.vs) {
-        // bolid liczony lokalnie: kąty z modelu zawieszenia (sprężyny, amortyzatory, transfer masy), powiększone,
+      if (c.vs && !c.pit && !c.retired) {
+        // bolid liczony lokalnie (w alei serwisowej i po odpadnięciu fizyka nie liczy zawieszenia: przybliżenie niżej): kąty z modelu zawieszenia (sprężyny, amortyzatory, transfer masy), powiększone,
         // bo prawdziwe przechyły F1 (poniżej 1°) byłyby na ekranie niewidoczne
         pitchT = Math.max(-0.035, Math.min(0.025, -num(c.pitchA, 0) * 6));
         rollT = Math.max(-0.03, Math.min(0.03, -num(c.rollA, 0) * 2));
         rec.pitch += (pitchT - rec.pitch) * damp(30, dt); rec.roll += (rollT - rec.roll) * damp(30, dt);
       } else {
-        // bolid z sieci: przybliżenie z przyspieszeń
+        // bolid z sieci, aleja serwisowa, bolid wycofany: przybliżenie z przyspieszeń
         pitchT = Math.max(-0.03, Math.min(0.02, rec.acc * 0.0007));
         rollT = Math.max(-0.025, Math.min(0.025, -(c.latAcc || 0) * 0.0006));
         rec.pitch += (pitchT - rec.pitch) * damp(10, dt); rec.roll += (rollT - rec.roll) * damp(10, dt);

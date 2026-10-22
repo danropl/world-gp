@@ -160,7 +160,7 @@
     var s = {
       vx: 0, vy: 0, r: 0, w: new Float64Array(4), al: new Float64Array(4), kap: new Float64Array(4),
       fz: new Float64Array(4), fx: new Float64Array(4), fy: new Float64Array(4), sig: new Float64Array(4), fT: new Float64Array(4),
-      Ts: new Float64Array(4), Tc: new Float64Array(4), wr: new Float64Array(4), Tb: new Float64Array(2), ps: new Float64Array(4), pb: new Float64Array(4), ab: new Float64Array([1, 1, 1, 1]),
+      Ts: new Float64Array(4), Tc: new Float64Array(4), wr: new Float64Array(4), Tb: new Float64Array(2), ps: new Float64Array(4), pb: new Float64Array(4), ab: new Float64Array([1, 1, 1, 1]), tg: 1,
       phi: 0, dphi: 0, th: 0, dth: 0, ax: 0, ay: 0, hF: 0, hR: 0, dlt: 0, aiI: 0,
       oV: NaN, oB: NaN, oH: NaN, shiftT: 0, gear: 1, rpm: VEH.rpmIdle, comp: car.compound, eLap: 0, thN: 0, thDt: 0
     };
@@ -377,7 +377,8 @@
     if (reversing) brk = 0;
 
     // ---- opony: kinematyka i siły (bez momentów) ----
-    var muB = V.mu0 * tgr * (p.gripMul || 1) * o.surfGrip * dp.gD * q.muP * (1 - 0.03 * (car.flat || 0));
+    // zużycie działa niżej, na każdym kole osobno (fWear); tgr (ze zużyciem) służy tylko do szacunków maxCurv i asysty
+    var muB = V.mu0 * PG.baseGrip(car, env) * (p.gripMul || 1) * o.surfGrip * dp.gD * q.muP * (1 - 0.03 * (car.flat || 0));
     var sigMax = 0, kapMin = 0, kapMax = 0, lockL = 0, lockR = 0;
     var Dv = DV; // D = µ·Fz na koło
     for (i = 0; i < 4; i++) {
@@ -399,7 +400,8 @@
 
     // ---- napęd: silnik, skrzynia, sprzęgło ----
     // automat zmienia biegi wg obrotów (prędkość tylnych kół, przy gazie z poślizgiem)
-    var vWr = (s.w[2] + s.w[3]) / 2 * V.R, vShift = thr > 0 && vWr > avx ? vWr : avx;
+    // (przy buksowaniu najwyżej o 25 % ponad prędkość jazdy, inaczej automat wrzuca kolejne biegi na kręcących się kołach)
+    var vWr = (s.w[2] + s.w[3]) / 2 * V.R, vShift = thr > 0 && vWr > avx ? Math.min(vWr, avx * 1.25 + 2) : avx;
     var gs = q.gs, gear = car.manual && human ? (car.mgear || 1) : PG.autoGear(s.gear, vShift * 3.6 / gs);
     if (gear > s.gear && !(car.manual && human)) s.shiftT = 0.03;
     if (car.manual && human && car.shiftT > 0) s.shiftT = Math.max(s.shiftT, car.shiftT);
@@ -423,6 +425,7 @@
     // AI i poziom 3: koło tarcia — napęd tylko z tej części przyczepności, której nie potrzebuje boczna siła
     // przy obecnym kącie znoszenia (jak idealnie dozowany gaz); poziomy 1–2 pilnują łącznego poślizgu
     car.tcAct = 0;
+    if (!car.tcOn || Tin <= 0) s.tg = 1;
     if (car.tcOn && Tin > 0) {
       var circ = !human || car.tcLvl === 3, sMax = car.tcLvl === 1 ? 1.3 : 1.1, lsum = 0, lmin = Infinity;
       for (i = 2; i < 4; i++) {
@@ -439,8 +442,15 @@
       }
       var lockT = q.pre + q.kP * Tin, lt = Math.min(lsum, 2 * lmin + 2 * lockT);
       // moment na rozpędzenie kół i silnika: przy przyspieszeniu, które da ta siła (filtrowane ax spóźnia się po zmianie biegu)
-      var aP = Math.max(s.ax, (lt / V.R - drag) / m, 0);
+      // (opór nawierzchni poza torem odejmuje się od przyspieszenia, inaczej zapas na bezwładność rozkręca koła)
+      var aP = Math.max(s.ax, (lt / V.R - drag) / m - (o.surfDrag || 0), 0);
       var lim = lt + 2 * IwR * aP / V.R;
+      // sprzężenie od rzeczywistego poślizgu (jak modulator ABS): gdy koło i tak buksuje za szczytem, siła opony
+      // na opadającej części krzywej jest mniejsza od limitu i koło rozkręca się dalej; wtedy szybko mniej momentu
+      var kq = Math.max(s.kap[2], s.kap[3]) / (tp.kp / q.kB * (circ ? 1 : sMax));
+      if (kq > 1.25) s.tg = Math.max(0.05, s.tg - (kq > 2 ? 30 : 10) * dt);
+      else if (kq < 1.05) s.tg = Math.min(1, s.tg + 3 * dt);
+      lim *= s.tg;
       if (Tin > lim) { car.tcAct = clamp((Tin - lim) / Tin * 2, 0, 1); Tin = lim; }
     }
     // pomoc stabilności (AI zawsze, gracz z ustawień): bolid obraca się szybciej, niż wynika z toru jazdy
@@ -457,7 +467,8 @@
     var Tlock = q.pre + (Tin >= 0 ? q.kP : q.kC) * Math.abs(Tin);
     var dTq = clamp(300 * (s.w[2] - s.w[3]), -Tlock, Tlock);
     DTQ[0] = 0; DTQ[1] = 0; DTQ[2] = Tin / 2 - dTq; DTQ[3] = Tin / 2 + dTq;
-    if (reversing) { DTQ[2] = -m * 5.5 * V.R / 2; DTQ[3] = DTQ[2]; }
+    // bieg wsteczny: moment najwyżej do przyczepności tylnych kół i bez rozkręcania kół (żwir, trawa)
+    if (reversing) for (i = 2; i < 4; i++) DTQ[i] = s.w[i] * V.R < -8 ? 0 : -Math.min(m * 5.5 * V.R / 2, 0.9 * Dv[i] * V.R);
 
     // ---- hamulce ----
     var bpF = brkFac(s.Tb[0]), bpR = brkFac(s.Tb[1]);
@@ -525,7 +536,7 @@
       var kp2 = s.kap[i];
       if (kp2 < kapMin && fr2) { kapMin = kp2; }
       if (fr2 && kp2 < -0.2) { if (i === 0) lockL = -kp2; else lockR = -kp2; }
-      if (!fr2 && kp2 > kapMax) kapMax = kp2;
+      if (!fr2 && (reversing ? -kp2 : kp2) > kapMax) kapMax = reversing ? -kp2 : kp2;
       // moc hamulców do temperatury tarcz
       var pb = BTQ[i] * Math.abs(wn);
       s.pb[i] = pb;

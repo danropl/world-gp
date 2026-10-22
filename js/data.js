@@ -3,7 +3,7 @@ var PG = (typeof window !== 'undefined' ? (window.PG = window.PG || {}) : (globa
 
 // Wersja gry: widoczna w menu; w multiplayer host przyjmuje tylko graczy z tą samą wersją. Zmieniaj przy każdej
 // aktualizacji razem z ?v= w znacznikach <script> w index.html (wtedy przeglądarka nie użyje starych plików z pamięci).
-PG.VERSION = '2026.10.22.1';
+PG.VERSION = '2026.10.22.2';
 
 // Tor Parco: fikcyjna nazwa; oś toru z geometrii GeoJSON (bacinger/f1-circuits, it-1922, licencja MIT, patrz THIRD_PARTY_NOTICES.md),
 // przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.

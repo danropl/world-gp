@@ -91,7 +91,7 @@ Kierownice (Logitech, Thrustmaster, Fanatec, Moza, Simucube i inne) i osobne ped
 1. **Ustawienia → Kierownica i pedały → Kalibruj:** puść pedały i ustaw kierownicę prosto, skręć do oporu w lewo, wciśnij gaz, wciśnij hamulec, potem naciśnij łopatki biegów (można pominąć). Kreator sam rozpoznaje osie i przyciski, także gdy pedały są osobnym urządzeniem albo gaz i hamulec dzielą jedną oś.
 2. Ustaw **obrót kierownicy** taki jak w programie producenta (np. 900°) i **pełny skręt bolidu** (domyślnie 360° od oporu do oporu, jak w bolidzie F1).
 
-Na kierownicy skręt i pedały działają wprost, bez wygładzania, a gaz i hamulec można wciskać jednocześnie. Łopatki zmieniają biegi przy ręcznej skrzyni. Przeglądarki nie udostępniają siły zwrotnej (force feedback), więc kierownica pracuje ze sprężyną centrującą ze sterownika. Bez kalibracji gra zgaduje osie (skręt na osi 0, pedały na osiach, które w spoczynku stoją na końcu zakresu).
+Na kierownicy skręt i pedały działają wprost, bez wygładzania, a gaz i hamulec można wciskać jednocześnie. Łopatki zmieniają biegi przy ręcznej skrzyni. Przeglądarki nie udostępniają siły zwrotnej (force feedback), więc kierownica pracuje ze sprężyną centrującą ze sterownika. Bez kalibracji gra zgaduje osie (skręt na osi 0, pedały na osiach, które w spoczynku stoją na końcu zakresu). Sterowanie przejmuje urządzenie, którego użyto ostatnio: podłączona, ale nieruszana kierownica nie odbiera jazdy klawiaturze ani padowi, a pady producentów kierownic (np. Thrustmaster eSwap) działają jak zwykłe pady.
 
 ## Weekend wyścigowy
 

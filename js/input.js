@@ -162,8 +162,16 @@
   // i przeglądarki), dlatego osie bierzemy z kalibracji. Bez niej: skręt na osi 0, pedały zgadnięte
   // z osi, które w spoczynku stoją na końcu zakresu. Pedały mogą być osobnym urządzeniem USB.
   var WHEEL_NAME = /wheel|kierownic|\bg2[579]\b|\bg9(20|23)\b|driving force|thrustmaster|fanatec|moza|simucube|simagic|cammus|asetek|pedal/i;
-  var WHEEL_ID = /046d[^0-9a-f]{1,12}(c24f|c260|c261|c262|c266|c267|c26d|c26e|c294|c298|c299|c29a|c29b|c2a0)|\b(044f|0eb7|346e|16d0)\b/i;
-  function isWheelId(id) { var t = String(id || ''); return WHEEL_NAME.test(t) || WHEEL_ID.test(t); }
+  // Logitech po numerze produktu: Firefox „046d-c24f-…", Chrome „(Vendor: 046d Product: c24f)"
+  var WHEEL_ID = /046d[\s\S]{1,16}?(c24f|c260|c261|c262|c266|c267|c26d|c26e|c294|c298|c299|c29a|c29b|c2a0)|\b(044f|0eb7|346e|16d0)\b/i;
+  // pady i joysticki tych samych producentów (Thrustmaster eSwap, T.16000M, Hotas…) zostają padami
+  var NOT_RIG = /gamepad|controller|joystick|hotas|t\.?16000|t\.?flight|eswap|dual ?analog|xinput/i;
+  // części stanowiska bez osi skrętu: bez kalibracji nie mogą być kierownicą
+  var NOT_STEER = /pedal|lcm|shifter|th8|hand ?brake|\btss\b|sequential|button ?box/i;
+  // urządzenie stanowiska (kierownica, pedały, skrzynia, hamulec ręczny) — nie jest padem
+  function isWheelId(id) { var t = String(id || ''); return /wheel|kierownic/i.test(t) || (!NOT_RIG.test(t) && (WHEEL_NAME.test(t) || WHEEL_ID.test(t))); }
+  // kandydat na kierownicę bez kalibracji: 2 — nazwa mówi „kierownica/baza", 1 — tylko producent, 0 — nie
+  function steerScore(id) { var t = String(id || ''); return !isWheelId(t) || NOT_STEER.test(t) ? 0 : /wheel|kierownic|driving force|\bbase\b/i.test(t) ? 2 : 1; }
   var Wheel = PG.Wheel = {
     active: false, calibrated: false, name: '', id: '',
     steer: 0, throttle: 0, brake: 0, lastAct: 0,
@@ -195,8 +203,9 @@
   }
   function guessPedals(g) {
     var ax = g.axes || [], out = [], i;
-    for (i = 1; i < ax.length && out.length < 2; i++) { var v = num(ax[i], 0); if (v > 0.9 || v < -0.9) out.push({ dev: g.id, axis: i, rest: v > 0 ? 1 : -1, full: v > 0 ? -1 : 1 }); }
-    return { thr: out[0] || null, brk: out[1] || null };
+    // pedał w spoczynku stoi na końcu zakresu ±1 (oś krzyżaka w Chrome spoczywa poza zakresem, np. 1,29)
+    for (i = 1; i < ax.length && out.length < 2; i++) { var v = num(ax[i], 0), a = v < 0 ? -v : v; if (a > 0.9 && a < 1.01) out.push({ dev: g.id, axis: i, rest: v > 0 ? 1 : -1, full: v > 0 ? -1 : 1 }); }
+    return { thr: out[0] || null, brk: out[1] || null, ok: out.length === 2 };
   }
   function btnDown(list, b) {
     var g = b && devById(list, b.dev), x = g && g.buttons ? g.buttons[b.btn] : null;
@@ -205,7 +214,7 @@
   Wheel.poll = function (list) {
     Wheel.list = list;
     var c = Wheel.cfg, sd = c && c.steer ? devById(list, c.steer.dev) : null, i;
-    if (!sd && list) for (i = 0; i < list.length; i++) { var g = list[i]; if (g && g.connected && isWheelId(g.id) && !/pedal/i.test(g.id)) { sd = g; break; } }
+    if (!sd && list) { var bs = 0; for (i = 0; i < list.length; i++) { var g = list[i], sc = g && g.connected ? steerScore(g.id) : 0; if (sc > bs) { bs = sc; sd = g; } } }
     Wheel.prevBtn.up = Wheel.btn.up; Wheel.prevBtn.down = Wheel.btn.down;
     if (!sd) {
       if (Wheel.active) { Wheel.active = false; Wheel.steer = 0; Wheel.throttle = 0; Wheel.brake = 0; if (Wheel.onChange) { try { Wheel.onChange(false, Wheel.name); } catch (e) { /* nic */ } } }
@@ -214,8 +223,9 @@
     }
     var fresh = !Wheel.active || Wheel.id !== sd.id;
     var cal = !!(c && c.steer && c.steer.dev === sd.id), ax = sd.axes || [];
-    if (!cal && !Wheel.guess[sd.id]) Wheel.guess[sd.id] = guessPedals(sd);
+    // pedały zgadnięte raz, gdy oba stoją w spoczynku (wciśnięty przy pierwszym odczycie — próbuj dalej)
     var gs = cal ? null : Wheel.guess[sd.id];
+    if (!cal && !(gs && gs.ok)) gs = Wheel.guess[sd.id] = guessPedals(sd);
     // skręt: obrót w sterowniku (rot) → pełne wychylenie bolidu przy kącie lock (bolid F1 ok. 360° od oporu do oporu)
     var raw = num(ax[cal ? c.steer.axis : 0], 0) - (cal ? num(c.steer.center, 0) : 0);
     if (cal && c.steer.inv) raw = -raw;
@@ -224,7 +234,14 @@
     Wheel.throttle = pedal(list, cal ? c.thr : gs.thr);
     Wheel.brake = pedal(list, cal ? c.brk : gs.brk);
     Wheel.btn.up = cal ? btnDown(list, c.up) : 0; Wheel.btn.down = cal ? btnDown(list, c.down) : 0;
-    if (Wheel.throttle > 0.05 || Wheel.brake > 0.05 || Wheel.steer > 0.04 || Wheel.steer < -0.04 || Wheel.btn.up || Wheel.btn.down) Wheel.lastAct = now();
+    // aktywność = zmiana, nie położenie: kierownica bez siły zwrotnej zostaje skręcona, gdzie ją zostawiono,
+    // a pedały w spoczynku bez kalibracji mogą stać daleko od zera (pad albo klawiatura nie tracą wtedy sterowania)
+    var pv = Wheel.pv;
+    if (fresh || !pv) pv = Wheel.pv = { s: Wheel.steer, t: Wheel.throttle, b: Wheel.brake };
+    var ds = Wheel.steer - pv.s, dtr = Wheel.throttle - pv.t, dbr = Wheel.brake - pv.b;
+    if (ds > 0.03 || ds < -0.03 || dtr > 0.05 || dtr < -0.05 || dbr > 0.05 || dbr < -0.05 || Wheel.hit('up') || Wheel.hit('down')) {
+      Wheel.lastAct = now(); pv.s = Wheel.steer; pv.t = Wheel.throttle; pv.b = Wheel.brake;
+    }
     Wheel.active = true; Wheel.calibrated = cal; Wheel.id = sd.id; Wheel.name = padName(sd.id);
     if (fresh && Wheel.onChange) { try { Wheel.onChange(true, Wheel.name); } catch (e2) { /* nic */ } }
   };

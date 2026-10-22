@@ -6,7 +6,7 @@ AI bolidów w WORLD GP nie uczy się ani nie przeszukuje drzewa decyzji. Każdy 
 
 AI steruje bolidem tymi samymi wejściami co gracz (`steer`, `throttle`, `brake`, `drsOpen`), a ruch liczy ta sama fizyka (`PG.stepCar` → `PG.Veh.step`: model na czterech kołach z oponami Pacejki, przeniesieniem obciążenia i temperaturą opon). Nie ma teleportacji ani „gumki” (rubber banding).
 
-Dokumentacja opisuje wersję gry 2026.10.22.1 w repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).
+Dokumentacja opisuje wersję gry 2026.10.22.2 w repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).
 
 | Plik | Rola w AI |
 | --- | --- |
@@ -130,7 +130,7 @@ gdzie L to rozstaw osi, a r prędkość odchylania. Do tego:
 1. Prędkość docelowa to wartość profilu w punkcie `2 + 0,05 × v` m przed bolidem, razy `ai.pace` (domyślnie 1).
 2. **Korekta za opony i pogodę:** `gr = przyczepność opon teraz / przy budowie profilu × min(1, gripT)`, gdzie `gripT` to współczynnik temperatury opon słabszej osi. W zakrętach, strefach hamowania i gdy `gr > 1` cel mnoży się przez √gr. Zimne, przegrzane albo zużyte opony = wolniej w zakrętach.
 3. Korekta za brudne powietrze (rozdział 5.3).
-4. **Wcześniejsze hamowanie.** Profil zakłada pełne hamowanie w czystym powietrzu na dobrych oponach. Gdy skuteczność `fB` jest mniejsza, AI hamuje wcześniej: `v² = vmin² + fB × (vp² − vmin²)`, gdzie `vmin` to najmniejsza prędkość profilu na drodze hamowania (`v² / 24` m, najwyżej 260 próbek). `fB` to iloczyn: `min(1, gr)`, utraty docisku w brudnym powietrzu, 0,93 w ciasnej stawce (rywal bliżej niż 40 m) i do 0,8 przy jeździe poza linią (trzeba jeszcze skręcać na hamowaniu).
+4. **Wcześniejsze hamowanie.** Profil zakłada pełne hamowanie w czystym powietrzu na dobrych oponach. Gdy skuteczność `fB` jest mniejsza, AI hamuje wcześniej: `v² = vmin² + fB × (vp² − vmin²)`, gdzie `vmin` to najmniejsza prędkość profilu na drodze hamowania (`v² / 24` m, najwyżej 260 próbek). `fB` to iloczyn: `min(1, gr)`, utraty docisku w brudnym powietrzu, 0,93 w ciasnej stawce (rywal bliżej niż 40 m) i do 0,8 przy jeździe poza linią po zewnętrznej (trzeba jeszcze skręcać na hamowaniu; po wewnętrznej tej kary nie ma, bo ciaśniejszy łuk obniża cel w punkcie 5).
 5. **Poza linią po wewnętrznej** (wyprzedzanie, unikanie) promień jest mniejszy niż w profilu: cel × √(max(0,5, 1 − k × Δ)), gdzie Δ to odległość od linii.
 6. **Poza asfaltem** (`|lat| > hw + 0,5`) bolid łagodnie zwalnia: cel nie niżej niż 30 m/s i najwyżej 0,5 m/s poniżej obecnej prędkości, hamulec najwyżej 0,35. Gwałtowne hamowanie na krawężniku w zakręcie kończyło się obrotem.
 7. Limity z ruchu w stawce (`cap`, rozdział 5) i samochodu bezpieczeństwa (`rcCap`, rozdział 9).
@@ -146,7 +146,7 @@ Pełny hamulec i pełny gaz nie wywracają bolidu, bo AI zawsze ma ABS, kontrol�
 
 ### 4.4 DRS
 
-AI otwiera DRS, gdy ma do niego prawo (`drsAllowed`: strata do bolidu przed nim poniżej 1,0 s w punkcie pomiaru, ta sama zasada co dla gracza), jest w strefie DRS, `steer` jest w granicach ±0,3 i nie hamuje. Każde z tych zdarzeń zamyka klapę przy następnej decyzji.
+AI otwiera DRS, gdy ma do niego prawo (`drsAllowed`: od drugiego okrążenia, na suchym torze, strata do bolidu przed nim poniżej 1,0 s w punkcie detekcji; uprawnienie trwa do końca najbliższej strefy; ta sama zasada co dla gracza), jest w strefie DRS, `steer` jest w granicach ±0,3 i nie hamuje. Każde z tych zdarzeń zamyka klapę przy następnej decyzji.
 
 ## 5. Ruch w stawce: wyprzedzanie, jazda za rywalem, aerodynamika
 
@@ -154,15 +154,15 @@ AI wyprzedza, zjeżdżając z linii jazdy o 5 m w bok od rywala, a gdy nie ma mi
 
 ### 5.1 Decyzja o wyprzedzaniu
 
-Na początku każdego wywołania `aiControl` przegląda wszystkie bolidy (poza wycofanymi i „duchami” po resecie). Rywal jest „na drodze”, gdy jest 0–34 m przed nim po osi toru i różnica pozycji bocznej jest mniejsza niż 4,4 m, liczona do obecnej pozycji AI albo do toru, na który AI zaraz wróci (przesunięcie ograniczone przed zakrętem, patrz niżej). Wtedy:
+Na początku każdego wywołania `aiControl` przegląda wszystkie bolidy (poza wycofanymi i „duchami” po resecie). Rywal jest „na drodze”, gdy jest 0–34 m przed nim po osi toru i różnica pozycji bocznej jest mniejsza niż 4,4 m, liczona do obecnej pozycji AI albo do toru, na który AI zaraz wróci (przesunięcie ograniczone przed zakrętem, patrz niżej). W trakcie wyprzedzania (strona już wybrana) próg rośnie do 5,6 m, żeby AI nie wracało na linię, gdy jest już obok rywala. Wtedy:
 
 1. AI sprawdza, czy jest szybsze: obecna prędkość większa od rywala o 0,3 m/s albo prędkość z profilu w tym miejscu większa o 1,5 m/s.
-2. Wybiera stronę, po której przy rywalu jest więcej miejsca do krawędzi (`roomR = hw − o.lat`, `roomL = o.lat + hw`), i zapamiętuje ją w `ai.side`, żeby nie przeskakiwać z boku na bok.
-3. Docelowe przesunięcie = pozycja rywala ± 5,0 m, liczone względem linii jazdy.
+2. Wybiera stronę: wewnętrzną najbliższego zakrętu w zasięgu 500 m (tam można później hamować), jeśli przy rywalu jest po niej co najmniej 4,5 m do krawędzi; inaczej stronę, po której jest więcej miejsca (`roomR = hw − o.lat`, `roomL = o.lat + hw`). Zapamiętuje ją w `ai.side`, żeby nie przeskakiwać z boku na bok.
+3. Docelowe przesunięcie = pozycja rywala ± 5,0 m, liczone względem linii jazdy, najwyżej do 2,2 m od krawędzi.
 
-**Przed zakrętem i w zakręcie AI trzyma się linii.** Inny tor jazdy przy prędkości z profilu wynosi bolid z toru, więc przesunięcie jest ograniczone według największej krzywizny na odcinku `20 + 1,2 × v` m przed bolidem:
+**Przed zakrętem i w zakręcie AI trzyma się linii po zewnętrznej.** Szerszy tor jazdy przy prędkości z profilu wynosi bolid z toru, więc przesunięcie na zewnętrzną jest ograniczone według największej krzywizny na odcinku `20 + 1,2 × v` m przed bolidem. Po wewnętrznej wolno do 5,5 m (atak na hamowaniu), ale nie na 1. okrążeniu: w ciasnej stawce przed pierwszym zakrętem kończyło się to kontaktem.
 
-| Krzywizna przed bolidem | Najwyższe przesunięcie | Tempo zmiany przesunięcia |
+| Krzywizna przed bolidem | Najwyższe przesunięcie na zewnętrzną | Tempo zmiany przesunięcia |
 | --- | --- | --- |
 | promień < 250 m | 1,5 m | 3 / s |
 | promień 250–600 m | 3 m | 3 / s |
@@ -170,13 +170,15 @@ Na początku każdego wywołania `aiControl` przegląda wszystkie bolidy (poza w
 
 Przesunięcie zmienia się płynnie: `offset += (cel − offset) × min(1, tempo × dt)`. Gdy nikogo nie ma na drodze, `ai.side` się zeruje, a cel wraca do 0, czyli na linię jazdy.
 
-**Bolid obok.** Gdy rywal zachodzi na AI (±7 m wzdłuż toru, mniej niż 4 m w bok, jedzie szybciej niż 3 m/s), AI nie zjedzie na niego bokiem: cel przesunięcia jest obcięty tak, by zostało co najmniej 2,5 m odstępu do jego pozycji. Gdy rywale są po obu stronach, AI jedzie środkiem między nimi. Jeśli bolid obok jest z przodu o ponad 1,5 m, AI odpuszcza i chowa się za nim (prędkość docelowa najwyżej `o.v − 1,5` m/s). Ta zasada ograniczyła kontakty na pierwszym okrążeniu, zwłaszcza w szykanach.
+**Przeszkoda.** Bolid wolniejszy niż 60% prędkości AI i niż 20 m/s (obrót, uszkodzenie) w zasięgu drogi hamowania (`12 + v² / 40` m) AI objeżdża od razu, także przed zakrętem i w zakręcie (limit przesunięcia nie obowiązuje, tempo 3 / s). Hamuje przed nim tylko wtedy, gdy przeszkoda zajmuje jego tor: w odległości bocznej `2,4 + 2,5 × |sin(kąt obrotu)|` m (bolid obrócony w poprzek zajmuje więcej szerokości).
+
+**Bolid obok.** Gdy rywal zachodzi na AI (±5,5 m wzdłuż toru, bolid ma 5 m długości; mniej niż 4 m w bok; jedzie szybciej niż 3 m/s), AI nie zjedzie na niego bokiem: cel przesunięcia jest obcięty tak, by zostało co najmniej 2,5 m odstępu do jego pozycji. Gdy rywale są po obu stronach, AI jedzie środkiem między nimi. Jeśli bolid obok jest z przodu o ponad 1,5 m, AI odpuszcza i chowa się za nim (prędkość docelowa najwyżej `o.v − 1,5` m/s). Bolid tuż za AI w tym samym torze (ponad 3 m z tyłu, mniej niż 1,5 m w bok) nie przesuwa AI: unikać ma jadący z tyłu. Ta zasada ograniczyła kontakty na pierwszym okrążeniu, zwłaszcza w szykanach.
 
 ### 5.2 Jazda za rywalem
 
 - **Odstęp:** gdy rywal jest bliżej niż 11 m i różnica boczna jest mniejsza niż 3,4 m (AI nie zdążyło jeszcze zjechać obok), prędkość docelowa jest ograniczona do 98,5% prędkości rywala, a poniżej 7 m do 90%. Przy objeżdżaniu bardzo wolnego bolidu (poniżej 8 m/s) AI nie zwalnia poniżej 6 m/s.
 - **Rywal hamuje:** gdy hamuje (hamulec > 0,2) i jest wolniejszy, w zasięgu 34 m i 3 m w bok, AI zostawia sobie drogę hamowania: `cel ≤ √(o.v² + 2 × 18 × max(0, d − 8))`.
-- **Bardzo wolny bolid przed nami** (obrót, uszkodzenie: wolniejszy niż 60% prędkości AI i niż 20 m/s, do 3,2 m w bok): to samo z opóźnieniem 20 m/s² i zasięgiem `12 + v² / 40` m, czyli całą drogą hamowania.
+- **Bardzo wolny bolid przed nami** (przeszkoda z rozdziału 5.1, gdy zajmuje tor AI): to samo z opóźnieniem 20 m/s² i zasięgiem `12 + v² / 40` m, czyli całą drogą hamowania.
 - **Ciasna stawka:** rywal bliżej niż 40 m i 3 m w bok → AI hamuje do zakrętów odrobinę wcześniej (`fB × 0,93`, rozdział 4.3).
 
 Kolizje i tak są liczone przez `PG.collide`, a uszkodzenia z kontaktu dwóch bolidów AI są mnożone przez 0,6 („AI między sobą ostrożniejsze”).
@@ -291,9 +293,9 @@ Największy wpływ na siłę AI ma `DIFF` w `session.js`. Pozostałe stałe zmie
 | ciasna stawka | `physics.js` | `fB` × 0,93 do 40 m | zapas na hamowaniu w grupie |
 | strefa wykrycia rywala | `physics.js` | 34 m, ±4,4 m | jak wcześnie AI zaczyna wyprzedzanie |
 | odstęp boczny przy wyprzedzaniu | `physics.js` | 5,0 m | jak szeroko AI omija rywala |
-| przesunięcie przy zakręcie | `physics.js` | 1,5 m (R < 250 m), 3 m (R < 600 m) | ile AI zjeżdża z linii przed zakrętem |
+| przesunięcie przy zakręcie | `physics.js` | zewnętrzna 1,5 m (R < 250 m), 3 m (R < 600 m); wewnętrzna 5,5 m od 2. okrążenia | ile AI zjeżdża z linii przed zakrętem, ataki na hamowaniu |
 | tempo zjazdu w bok | `physics.js` | 3 / s przy zakręcie, 1,6 / s na prostej | jak gwałtownie AI zmienia linię |
-| bolid obok | `physics.js` | ±7 m, odstęp 2,5 m | kontakty bokiem, zwłaszcza na 1. okrążeniu |
+| bolid obok | `physics.js` | ±5,5 m, odstęp 2,5 m | kontakty bokiem, zwłaszcza na 1. okrążeniu |
 | limit za rywalem | `physics.js` | 98,5% (< 11 m), 90% (< 7 m) | ryzyko najechania na tył |
 | utrata docisku w brudnym powietrzu | `physics.js`, `PHYS.dirtyF`, `dirtyR` | 0,26 / 0,14 | trudność jazdy tuż za rywalem (gracz i AI) |
 | odstęp linii od krawędzi | `track.js` | 1,6 m | jak blisko krawędzi jeździ AI |

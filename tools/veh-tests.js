@@ -73,4 +73,18 @@ function log(s) { out.push(s); console.log(s); }
   for (var j = 0; j < rs.length; j++) if (Math.abs(rs[j]) >= 0.9 * rEnd) { t90 = j * H; break; }
   log('Skok skrętu: yaw rate ' + rEnd.toFixed(3) + ' rad/s, 90% po ' + t90.toFixed(3) + ' s, przeregulowanie ' + ((rMax / rEnd - 1) * 100).toFixed(0) + '%');
 })();
+// 5. kontrola trakcji poza torem i cofanie na żwirze (koła nie mogą się rozkręcać bez końca)
+(function () {
+  function surf(g, base, k) { return function (v) { return { surfGrip: g, surfDrag: (base + k * v * v) * Math.min(1, v / 8), kerb: false, offRoad: true, dp: O.dp, dirtyF: 0, dirtyR: 0, human: true }; }; }
+  var grass = surf(0.5, 2, 0.012), gravel = surf(0.38, 5, 0.03);
+  [1, 2, 3].forEach(function (lvl) {
+    var c = mk(); c.tcLvl = lvl; c.sAssist = true; c.inWheel = false; c.v = 25; c.vsHard = true; c.brake = 0; c.steer = 0;
+    var kMax = 0;
+    for (var i = 0; i < 3 / H; i++) { c.throttle = Math.min(1, i * H / 0.2); PG.Veh.step(c, H, env, grass(Math.abs(c.v))); kMax = Math.max(kMax, c.vs.kap[2], c.vs.kap[3]); }
+    log('TC ' + lvl + ' na trawie (wyjazd 90 km/h, pełny gaz 3 s): ' + (c.v * 3.6).toFixed(0) + ' km/h, bieg ' + c.gear + ', maks. poślizg tylnych kół ' + kMax.toFixed(2));
+  });
+  var r = mk(); r.tcOn = false; r.wantRev = true; r.revT = 1; r.throttle = 0; r.brake = 1; r.steer = 0;
+  for (var j = 0; j < 6 / H; j++) PG.Veh.step(r, H, env, gravel(Math.abs(r.v)));
+  log('Cofanie na żwirze 6 s: ' + (r.v * 3.6).toFixed(1) + ' km/h, koło ' + (r.vs.w[2] * PG.VEH.R).toFixed(1) + ' m/s, zużycie tylnej opony ' + r.vs.wr[2].toFixed(3));
+})();
 module.exports = out;

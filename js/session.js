@@ -79,14 +79,15 @@
   }
   PG.setupAI = setupAI;
 
-  // Profil prędkości uszkodzonego bolidu (wolniejszy, by AI nie wypadało z toru)
-  function rebuildProfile(c, T) {
+  // Profil prędkości uszkodzonego bolidu (wolniejszy, by AI nie wypadało z toru) albo po zmianie setupu
+  function rebuildProfile(c, T, full) {
     if (!c.ai || !c.params || !PG.dmgPerf) return;
-    var d = PG.dmgPerf(c, true), p = c.params;
+    var d = PG.dmgPerf(c, full !== false), p = c.params;
     var aero = Math.min(d.aF, d.aR), gD = d.gD, pw = d.pw, drag = d.drag;
     c.profKey = aero + gD + pw;
     c.profile = PG.speedProfile(T, { power: p.power * pw, cd: p.cd * drag, gripMul: p.gripMul * c.ai.refGrip * c.ai.skill * gD, aeroMul: p.aeroMul * aero, brakeMul: 0.97, setup: c.setup });
   }
+  PG.rebuildProfile = rebuildProfile;
 
   // Czas okrążenia AI w kwalifikacjach (symulacja)
   PG.simQualiTime = function (T, team, driver, env, difficulty) {

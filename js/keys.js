@@ -44,11 +44,13 @@
     ACTIONS.forEach(function (a) { (K.map[a[0]] || []).forEach(function (c) { if (c) K.byCode[c] = a[0]; }); });
   }
   K.load = function () {
-    var d = defaults(), saved = readCookie();
+    var d = defaults(), saved = readCookie(), own = {};
     if (saved && typeof saved === 'object') Object.keys(d).forEach(function (k) {
       var v = saved[k];
-      if (Array.isArray(v)) d[k] = [String(v[0] || ''), String(v[1] || '')];
+      if (Array.isArray(v)) { d[k] = [String(v[0] || ''), String(v[1] || '')]; d[k].forEach(function (c) { if (c) own[c] = k; }); }
     });
+    // klawisz przypisany przez gracza wygrywa z domyślnym klawiszem innej akcji (np. nowej akcji po aktualizacji gry)
+    Object.keys(d).forEach(function (k) { for (var i = 0; i < 2; i++) if (d[k][i] && own[d[k][i]] && own[d[k][i]] !== k) d[k][i] = ''; });
     K.map = d; rebuild();
   };
   // Zapis tylko różnic względem domyślnych, by ciasteczko było krótkie

@@ -248,37 +248,59 @@
     var look = Math.round((12 + v * 0.36) / T.ds);
     var ai = car.ai;
     // unikanie i wyprzedzanie
-    // w zakręcie (i przed nim) trzymaj się blisko linii: inny tor jazdy przy prędkości z profilu wynosi bolid z toru
-    var kAh = 0, nAh = Math.round((20 + v * 1.2) / T.ds);
-    for (var ka = 0; ka <= nAh; ka += 3) { var kk = Math.abs(L.k[(car.idx + ka) % N]); if (kk > kAh) kAh = kk; }
-    var offLim = kAh > 1 / 250 ? 1.5 : kAh > 1 / 600 ? 3 : 99;
-    // gdzie będziemy jechać za chwilę (powrót na linię przed zakrętem) — rywal na tym torze też jest „przed nami"
-    var offNext = Math.max(-offLim, Math.min(offLim, car.offsetTarget || 0));
+    // w zakręcie (i przed nim) trzymaj się blisko linii po zewnętrznej: szerszy tor jazdy przy prędkości z profilu
+    // wynosi bolid z toru. Po wewnętrznej wolno (atak na hamowaniu): ciaśniejszy łuk obniża cel prędkości niżej (kdl).
+    var kAh = 0, kSg = 0, nAh = Math.round((20 + v * 1.2) / T.ds);
+    for (var ka = 0; ka <= nAh; ka += 3) { var kv = L.k[(car.idx + ka) % N], kk = Math.abs(kv); if (kk > kAh) { kAh = kk; kSg = kv > 0 ? 1 : -1; } }
+    var offLim = kAh > 1 / 250 ? 1.5 : kAh > 1 / 600 ? 3 : 99, offRate = offLim < 99 ? 3 : 1.6;
+    // przeszkoda (obrót, uszkodzenie) w zasięgu drogi hamowania: objazd także przed zakrętem i w zakręcie
+    var avoid = false, vSlow = Math.min(v * 0.6, 20), dSlow = 12 + v * v / 40;
+    for (var ia = 0; ia < cars.length && !(car.ghost > 0); ia++) {
+      var oa = cars[ia]; if (oa === car || oa.retired || oa.ghost > 0) continue;
+      var da = oa.dist - car.dist;
+      if (da > 0 && da < dSlow && oa.v < vSlow && Math.abs(oa.lat - car.lat) < 6.5) { avoid = true; offLim = 99; offRate = 3; break; }
+    }
+    // atak po wewnętrznej nie na 1. okrążeniu: w ciasnej stawce przed pierwszym zakrętem kończy się kontaktem
+    if (car.dist < T.N * T.ds) kSg = 0;
+    function limOff(x) { return x * kSg > 0 ? Math.max(-5.5, Math.min(5.5, x)) : Math.max(-offLim, Math.min(offLim, x)); }
+    // gdzie będziemy jechać za chwilę (powrót na linię przed zakrętem) — rywal na tym torze też jest „przed nami";
+    // z obecnego przesunięcia, a nie z celu z poprzedniej decyzji (ten przeskakuje między decyzjami)
+    var offNext = limOff(car.offset || 0);
     var wantOff = 0, cap = Infinity, close = false, sideLo = -Infinity, sideHi = Infinity;
     for (var i = 0; i < cars.length; i++) {
       var o = cars[i]; if (o === car || o.retired) continue;
       if (car.ghost > 0 || o.ghost > 0) continue; // po powrocie na tor bolidy przenikają się — nie blokuj się nawzajem
       var dd = o.dist - car.dist;
-      // bolid obok (zachodzą na siebie): nie zjeżdżaj na niego bokiem; jeśli jest przed nami, odpuść i schowaj się za nim
-      if (dd > -7 && dd < 7 && o.v > 3) {
+      // bolid obok (zachodzą na siebie, bolid ma 5 m): nie zjeżdżaj na niego bokiem; jeśli jest przed nami, odpuść
+      // i schowaj się za nim. Bolid tuż za nami w tym samym torze to sprawa jadącego z tyłu.
+      if (dd > -5.5 && dd < 5.5 && o.v > 3) {
         var lds = o.lat - car.lat;
-        if (lds > -4 && lds < 4) {
+        if (lds > -4 && lds < 4 && !(dd < -3 && lds > -1.5 && lds < 1.5)) {
           if (lds > 0) sideHi = Math.min(sideHi, o.lat - 2.5); else sideLo = Math.max(sideLo, o.lat + 2.5);
           if (dd > 1.5 && v > o.v - 1) cap = Math.min(cap, o.v - 1.5);
         }
       }
-      // bardzo wolny bolid przed nami (obrót, uszkodzenie): hamuj na czas, z zasięgiem drogi hamowania
-      if (dd > 0 && dd < 12 + v * v / 40 && o.v < Math.min(v * 0.6, 20) && Math.abs(o.lat - car.lat) < 3.2) {
-        var ov = Math.max(0, o.v);
-        cap = Math.min(cap, Math.sqrt(ov * ov + 2 * 20 * Math.max(0, dd - 8)));
+      // bardzo wolny bolid przed nami (obrót, uszkodzenie): hamuj na czas, z zasięgiem drogi hamowania, jeśli zajmuje
+      // nasz tor (bolid ma 5 × 2,1 m; obrócony w poprzek zajmuje więcej szerokości)
+      var slowO = dd > 0 && dd < dSlow && o.v < vSlow;
+      if (slowO) {
+        var clr = 2.4 + 2.5 * Math.abs(Math.sin(o.h - Math.atan2(T.ty[o.idx], T.tx[o.idx])));
+        if (Math.abs(o.lat - car.lat) < clr) { var ov = Math.max(0, o.v); cap = Math.min(cap, Math.sqrt(ov * ov + 2 * 20 * Math.max(0, dd - 8))); }
       }
-      if (dd > 0 && dd < 34) {
+      // wyprzedzanie (przeszkodę objeżdżaj już z drogi hamowania, nie dopiero z 34 m)
+      if (dd > 0 && (dd < 34 || slowO)) {
         var ld = Math.min(Math.abs(o.lat - car.lat), Math.abs(o.lat - (L.o[o.idx] || 0) - offNext));
-        if (ld < 4.4) {
+        // histereza: w trakcie wyprzedzania (już obok, ok. 5 m w bok) nie wracaj na linię, dopóki rywal jest przed nami
+        if (ld < (ai.side ? 5.6 : 4.4)) {
           var myPot = car.profile.v[car.idx] * ai.pace;
           if (car.v > o.v + 0.3 || myPot > o.v + 1.5) {
-            var roomR = T.hw - o.lat, roomL = o.lat + T.hw;
-            var side = ai.side || (roomR > roomL ? 1 : -1);
+            var roomR = T.hw - o.lat, roomL = o.lat + T.hw, side = ai.side;
+            if (!side) {
+              // atak po wewnętrznej najbliższego zakrętu (tam można później hamować), jeśli jest miejsce; inaczej tam, gdzie go więcej
+              var kin = 0;
+              for (var kn = 0, nk = Math.round(500 / T.ds); kn < nk; kn += 4) { var kq = L.k[(car.idx + kn) % N]; if (kq > 1 / 400 || kq < -1 / 400) { kin = kq > 0 ? 1 : -1; break; } }
+              side = kin && (kin > 0 ? roomR : roomL) > 4.5 ? kin : (roomR > roomL ? 1 : -1);
+            }
             ai.side = side;
             wantOff = (o.lat + side * 5.0) - (L.o[car.idx] || 0);
           }
@@ -291,12 +313,15 @@
       }
     }
     if (wantOff === 0) ai.side = 0;
-    car.offsetTarget = Math.max(-offLim, Math.min(offLim, wantOff));
+    car.offsetTarget = limOff(wantOff);
     if (sideLo > -Infinity || sideHi < Infinity) {
       var lo0 = sideLo - (L.o[car.idx] || 0), hi0 = sideHi - (L.o[car.idx] || 0);
       car.offsetTarget = lo0 > hi0 ? (lo0 + hi0) / 2 : Math.max(lo0, Math.min(hi0, car.offsetTarget));
     }
-    car.offset += (car.offsetTarget - car.offset) * Math.min(1, dt * (offLim < 99 ? 3 : 1.6));
+    // nie dalej niż 2,2 m od krawędzi (jak punkt celu skrętu)
+    var lo1 = -T.hw + 2.2 - (L.o[car.idx] || 0), hi1 = T.hw - 2.2 - (L.o[car.idx] || 0);
+    car.offsetTarget = Math.max(lo1, Math.min(hi1, car.offsetTarget));
+    car.offset += (car.offsetTarget - car.offset) * Math.min(1, dt * offRate);
     var ti = (car.idx + look) % N;
     var off = Math.max(-T.hw + 2.2 - L.o[ti], Math.min(T.hw - 2.2 - L.o[ti], car.offset));
     var tx = L.x[ti] + T.nx[ti] * off, ty = L.y[ti] + T.ny[ti] * off;
@@ -348,7 +373,8 @@
     // strefa hamowania: profil zakłada pełne hamowanie w czystym powietrzu na dobrych oponach; przy mniejszej
     // skuteczności (brudne powietrze, zimne/zużyte opony, ciasno w stawce) hamuj wcześniej: v² = vmin² + f·(vp² − vmin²)
     // daleko od linii (wyprzedzanie) trzeba jeszcze skręcić na hamowaniu: mniej siły na hamowanie
-    var dLn = Math.abs(car.lat - L.o[car.idx]);
+    // (po wewnętrznej nadchodzącego zakrętu bez tej kary: ciaśniejszy łuk już obniżył cel (kdl), a atak na hamowaniu ma sens)
+    var dLn = L.k[pi] * (car.lat - L.o[car.idx]) > 0 ? 0 : Math.abs(car.lat - L.o[car.idx]);
     var fB = Math.min(1, gr) * (1 - aero * 0.6 * dirty) * (close ? 0.93 : 1) * (dLn > 1 ? Math.max(0.8, 1 - 0.03 * (dLn - 1)) : 1);
     if (fB < 0.995) {
       var W = Math.min(260, Math.round(v * v / 24 / T.ds)), vmin = PV[pi];

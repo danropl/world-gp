@@ -239,7 +239,8 @@
   function assistPanel(compact) {
     var box = h('div', { class: 'col', style: 'gap:8px' });
     function render() {
-      var refocus = box.contains(document.activeElement);
+      var ae = document.activeElement, fi = -1;
+      if (box.contains(ae)) { var fs = box.querySelectorAll('.field'); for (var q = 0; q < fs.length; q++) if (fs[q].contains(ae)) fi = q; }
       box.innerHTML = '';
       var pr = G.assistPreset ? G.assistPreset() : '';
       var ps = seg([['easy', 'Łatwy'], ['std', 'Standard'], ['sim', 'Sim']], pr, function (v) { G.applyAssistPreset(v); if (G.applyGearbox) G.applyGearbox(); render(); });
@@ -252,7 +253,11 @@
       box.appendChild(h('div', { class: 'field' }, 'Kontra przy poślizgu', assistSeg('cs', render)));
       box.appendChild(h('div', { class: 'field' }, 'Kontrola stabilności', assistSeg('stab', render)));
       box.appendChild(h('div', { class: 'field' }, 'Skrzynia biegów', gearSeg(render)));
-      if (refocus) { var on = ps.querySelector('.on') || ps.firstChild; if (on) on.focus(); }
+      if (fi >= 0) {
+        // fokus wraca na to samo pole (wybraną opcję), a nie na początek panelu
+        var f = box.querySelectorAll('.field')[fi], on = f && (f.querySelector('.on') || f.querySelector('button'));
+        if (on) { if (PG.Pad && PG.Pad.connected) UI.padFocus(on); else on.focus(); }
+      }
     }
     render();
     return box;
@@ -510,9 +515,12 @@
       });
       return best;
     }
-    // przycisk właśnie wciśnięty (zbocze względem poprzedniego odczytu), inny niż już przypisana łopatka
+    // przycisk właśnie wciśnięty (zbocze względem poprzedniego odczytu), inny niż już przypisana łopatka; tylko
+    // z kierownicy, pedałów albo innego urządzenia stanowiska (pad, którym poruszasz się po menu, się nie liczy)
+    function rigDev(id) { return W.isWheel(id) || [cal.steer, cal.thr, cal.brk].some(function (u) { return u && u.dev === id; }); }
     function newButton(snap, prev) {
       for (var k = 0; k < snap.length; k++) {
+        if (!rigDev(snap[k].id)) continue;
         var d = snap[k], b = cal.base.find(function (x) { return x.id === d.id; }), pv = prev && prev.find(function (x) { return x.id === d.id; });
         for (var i = 0; i < d.buttons.length; i++) {
           if (!d.buttons[i] || (b && b.buttons[i]) || !pv || pv.buttons[i]) continue;
@@ -532,7 +540,7 @@
       st.wheel = cfg; Store.save(); W.setCfg(cfg); cal = null;
       UI.toast('Kierownica skalibrowana'); renderWiz();
     }
-    function next() { cal.step++; cal.best = null; cal.hold = 0; if (cal.step >= STEPS.length) finish(); else renderWiz(); }
+    function next() { cal.step++; cal.best = null; cal.hold = 0; cal.prev = null; cal.peak = 0; if (cal.step >= STEPS.length) finish(); else renderWiz(); }
     function renderWiz() {
       wiz.innerHTML = '';
       if (!cal) {
@@ -556,6 +564,8 @@
       if (stp[0] === 'up' || stp[0] === 'down') row.appendChild(h('button', { type: 'button', text: 'Pomiń', onclick: next }));
       row.appendChild(h('button', { type: 'button', class: 'small', text: 'Anuluj', onclick: function () { cal = null; renderWiz(); } }));
       wiz.appendChild(row);
+      // po przebudowie fokus zostaje w kreatorze (pad: inaczej ✕ trafiłby w „Gotowe" i porzucił kalibrację)
+      if (PG.Pad && PG.Pad.connected && p.isConnected) UI.padFocus(row.querySelector('button.primary'));
     }
     // co 100 ms: podgląd osi, stan, wykrywanie ruchu w kreatorze (samo przechodzi dalej po 0,6 s przytrzymania)
     function tick() {
@@ -579,9 +589,12 @@
       cal.best = b;
       if (b && Math.abs(b.dv) > 0.25) {
         cal.info.textContent = 'Wykryto: oś ' + b.axis + ' · ' + b.name;
-        cal.hold = Math.abs(b.dv) > 0.5 ? (cal.hold || 0) + 1 : 0;
-        if (cal.hold >= 6) { store(k, b); next(); }
-      } else { cal.info.textContent = 'Czekam na ruch…'; cal.hold = 0; }
+        // samo dalej dopiero, gdy oś stoi (pedał wciśnięty do końca i trzymany, a nie w trakcie wciskania)
+        var mag = Math.abs(b.dv), grow = mag > (cal.peak || 0) + 0.02;
+        if (grow) cal.peak = mag;
+        cal.hold = mag > 0.5 && !grow ? (cal.hold || 0) + 1 : 0;
+        if (cal.hold >= 8) { store(k, b); next(); }
+      } else { cal.info.textContent = 'Czekam na ruch…'; cal.hold = 0; cal.peak = 0; }
     }
     p.appendChild(wiz);
     renderWiz();
@@ -723,6 +736,7 @@
     del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () {
       var oq = G.quality(), op = !!Store.data.settings.post;
       Store.reset(); if (G.mergeSettings) G.mergeSettings(); Store.save();
+      if (G.applyWheelSettings) G.applyWheelSettings(); // kalibracja i kąt obrotu kierownicy też wracają do domyślnych
       var ns = Store.data.settings; PG.Audio.setVol(ns.vol); PG.Audio.setOn(ns.sound);
       if (G.use3D && (G.quality() !== oq || !!ns.post !== op)) G.reconfigureGraphics();
       quick.teamId = null; quick.driverIdx = 0;
@@ -1199,9 +1213,10 @@
     if (G.setupAllowed && G.setupAllowed()) p.insertBefore(h('button', { type: 'button', text: 'Setup bolidu', onclick: function () {
       UI.setupOverlay({ team: S.player.team, driver: S.player.driver, wet: S.env.wet, live: true });
     } }), p.querySelector('button.danger'));
-    var bbBase = S.player.setup ? S.player.setup.bias : PG.SETUP_DEF.bias;
-    var bbOut = h('b', { class: 'num', text: (bbBase + (S.player.bbAdj || 0)) + '%' });
-    function bb(d) { G.paused = false; G.brakeBias(d); G.paused = true; bbOut.textContent = (bbBase + (S.player.bbAdj || 0)) + '%'; }
+    // balans liczony przy każdym odczycie (setup mógł się zmienić w tej samej pauzie)
+    function bbNow() { var p0 = S.player; return (p0.setup ? p0.setup.bias : PG.SETUP_DEF.bias) + (p0.bbAdj || 0) + '%'; }
+    var bbOut = h('b', { class: 'num', text: bbNow() });
+    function bb(d) { G.paused = false; G.brakeBias(d); G.paused = true; bbOut.textContent = bbNow(); }
     var opt = h('div', { class: 'col', style: 'gap:8px;margin-top:8px' }, h('h3', { text: 'Asysty i podpowiedzi' }),
       assistPanel(true),
       h('div', { class: 'field' }, 'Balans hamulców (przód) · w jeździe [ i ]', h('div', { class: 'row' },
@@ -1721,7 +1736,9 @@
       el.selectedIndex = k;
       el.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (el.type === 'range') {
-      var mn = el.min === '' ? 0 : +el.min, mx = el.max === '' ? 100 : +el.max, step = (mx - mn) / 20;
+      // krok: ok. 1/20 zakresu, ale wielokrotność kroku suwaka (inaczej pół kroku zaokrągla się z powrotem)
+      var mn = el.min === '' ? 0 : +el.min, mx = el.max === '' ? 100 : +el.max, step = (mx - mn) / 20, es = +el.step;
+      if (es > 0) step = Math.max(1, Math.round(step / es)) * es;
       el.value = String(Math.max(mn, Math.min(mx, (+el.value || 0) + d * step)));
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
