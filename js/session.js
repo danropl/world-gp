@@ -95,7 +95,8 @@
     var car = { compound: env.wet ? 'W' : 'S', wear: 0 };
     var ref = PG.tyreGrip(car, env);
     var prof = PG.speedProfile(T, { power: p.power, cd: p.cd, gripMul: p.gripMul * ref * skill, aeroMul: p.aeroMul, brakeMul: 0.97 });
-    return prof.lapTime * 1.005 + Math.random() * 0.35;
+    // AI na pełnej fizyce jedzie ok. 3 % wolniej niż idealny profil (pomiar: tools/physics-bench, Monza, S/W)
+    return prof.lapTime * 1.032 + Math.random() * 0.35;
   };
 
   PG.updateSession = function (S, dt, input) {
