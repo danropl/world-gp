@@ -144,7 +144,10 @@
       var pts = [], pe = T.pit.entry, px = T.pit.exit, pi;
       for (pi = pe; pi !== wrapI(px + 1, N); pi = wrapI(pi + 1, N)) pts.push(P(pi, T.pitA[pi]));
       for (pi = px; pi !== wrapI(pe - 1, N); pi = wrapI(pi - 1, N)) pts.push(P(pi, T.pitB[pi]));
-      var po = { kind: 'pitlane', pts: pts }; bbox(po); sc.push(po);
+      // biała linia po wewnętrznej stronie drogi (przed odbojnicami odcina asfaltowy klin przy torze)
+      var line = [], LL = T.pitL || T.pitA;
+      for (pi = pe; pi !== wrapI(px + 1, N); pi = wrapI(pi + 1, N)) line.push(P(pi, LL[pi]));
+      var po = { kind: 'pitlane', pts: pts, line: line }; bbox(po); sc.push(po);
     } else band(p0, p1, hw + 4.2, hw + 13, 'pitlane');
     band(p0, p1, hw + 3, hw + 4.2, 'wall');
     // budynek boksów z garażami

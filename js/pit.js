@@ -119,7 +119,7 @@
   function road(T, fi) {
     var N = T.N, i = wrapI(Math.floor(fi), N), j = wrapI(i + 1, N), f = fi - Math.floor(fi);
     if (!T.pitA) return T.pit.lane;
-    var a = T.pitA[i] + (T.pitA[j] - T.pitA[i]) * f, b = T.pitB[i] + (T.pitB[j] - T.pitB[i]) * f;
+    var A = T.pitL || T.pitA, a = A[i] + (A[j] - A[i]) * f, b = T.pitB[i] + (T.pitB[j] - T.pitB[i]) * f;
     return Math.min(T.pit.lane, (a + b) / 2);
   }
 
