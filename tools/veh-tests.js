@@ -87,4 +87,31 @@ function log(s) { out.push(s); console.log(s); }
   for (var j = 0; j < 6 / H; j++) PG.Veh.step(r, H, env, gravel(Math.abs(r.v)));
   log('Cofanie na żwirze 6 s: ' + (r.v * 3.6).toFixed(1) + ' km/h, koło ' + (r.vs.w[2] * PG.VEH.R).toFixed(1) + ' m/s, zużycie tylnej opony ' + r.vs.wr[2].toFixed(3));
 })();
+// 6. pełny gaz w zakręcie bez TC (100 km/h, 2. bieg): bolid ma się obrócić, a nie jechać długo bokiem.
+// Kierowca reaguje po 0,1 s: kontra od kąta znoszenia i nadmiaru obrotu, gaz do 'lift', po 0,6 s znowu 80 %.
+(function () {
+  function run(name, pad, cs, steer0, lift, K) {
+    var c = mk(); c.tcOn = false; c.absOn = false; c.analogIn = true; c.csAssist = cs; c.inWheel = !pad; c.sAssist = pad;
+    c.v = 100 / 3.6; c.vsHard = true; c.brake = 0; step(c, 1);
+    var s = c.vs, t = 0, i;
+    for (i = 0; i < 2.5 / H; i++) { c.steer = steer0 * Math.min(1, t / 0.5); c.throttle = Math.max(0, Math.min(1, (100 / 3.6 - c.v) * 0.5 + 0.12)); step(c, 1); t += H; }
+    var hist = [], st = steer0, th = 0.15, t15 = -1, spun = 0, react = -1, rate = pad ? 6 : 5;
+    for (i = 0; i < 5 / H; i++) {
+      var bd = hist.length > 50 ? hist[hist.length - 50] : { b: 0, ex: 0, rx: 0 };
+      if (react < 0 && (bd.ex > 0.25 || Math.abs(bd.b) > 0.08)) react = i * H;
+      var want = react < 0 ? steer0 : Math.max(-1, Math.min(1, K * bd.b - bd.rx));
+      st += Math.max(-rate * H, Math.min(rate * H, want - st));
+      var thW = react < 0 ? 1 : i * H - react < 0.6 ? lift : Math.abs(bd.b) < 0.35 ? 0.8 : lift;
+      th += Math.max(-8 * H, Math.min(8 * H, thW - th));
+      c.steer = st; c.throttle = th; step(c, 1);
+      var b = Math.atan2(s.vy, s.vx), rp = s.ay / Math.max(c.v, 5);
+      hist.push({ b: b, ex: Math.abs(s.r) - Math.abs(rp), rx: s.r - rp });
+      if (t15 < 0 && Math.abs(b) > 0.26) t15 = i * H;
+      if (!spun && Math.abs(b) > Math.PI / 2) { spun = i * H; break; }
+    }
+    log('Gaz w zakręcie bez TC, ' + name + ': ' + (spun ? 'obrót po ' + spun.toFixed(2) + ' s' : 'bez obrotu') + ', bokiem (15–90°) ' + (t15 < 0 ? 0 : (spun || 5) - t15).toFixed(2) + ' s');
+  }
+  run('kierownica, kontra i 40 % gazu', false, false, 0.2, 0.4, 3);
+  run('pad z pomocą kontry, gaz do końca', true, true, 0.4, 1, 2);
+})();
 module.exports = out;

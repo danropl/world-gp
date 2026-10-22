@@ -113,7 +113,7 @@
   }
   // Siły opony w układzie koła (x do przodu, y w prawo) do TF[0], TF[1]; TF[2] = znormalizowany poślizg σ,
   // TF[3] = dFx/dκ (do półniejawnego obrotu koła). D = µ·Fz, ap = kąt szczytu, kp = poślizg szczytu, kB = sztywność (ciśnienie)
-  var TF = new Float64Array(4);
+  var TF = new Float64Array(4), GYK = 0.25;
   function tanA(alpha) { return Math.tan(alpha < -1.45 ? -1.45 : alpha > 1.45 ? 1.45 : alpha); }
   // ta = tan(α) (liczony raz na koło w kroku)
   function tyre(D, ap, kp, kB, ta, kappa) {
@@ -123,8 +123,12 @@
     if (!(D > 0)) { TF[0] = 0; TF[1] = 0; TF[3] = 0; return; }
     if (!(s > 1e-6)) { TF[0] = 0; TF[1] = 0; TF[3] = D * GX[1] * MFS * cx / kp; return; }
     var gx = mfL(GX, cx * s), dgx = MD, gy = mfL(GY, BY * kB * s), is = 1 / s, ux = sx * is, uy = sy * is;
+    // koło buksujące albo zablokowane (poślizg wzdłużny wyraźnie za szczytem) traci siłę boczną szybciej, niż
+    // wynika z koła tarcia (jak funkcja wagowa Gyκ w Magic Formula): gaz bez kontroli trakcji kończy się
+    // obrotem, a nie długim driftem na kręcących się tylnych kołach
+    var ax = sx < 0 ? -sx : sx, wy = ax > 1.5 ? 1 / (1 + GYK * (ax - 1.5)) : 1;
     TF[0] = D * gx * ux;
-    TF[1] = -D * gy * uy;
+    TF[1] = -D * gy * uy * wy;
     TF[3] = D * (dgx * cx * ux * ux + gx * uy * uy * is) / kp;
   }
   Veh.tyre = function (D, ap, kp, kB, alpha, kappa) { tyre(D, ap, kp, kB, tanA(alpha), kappa); return [TF[0], TF[1], TF[2], TF[3]]; };
@@ -345,9 +349,12 @@
         var dmax = Math.min(V.lock, 1.2 * apF + V.L * aLat / (vxs * vxs));
         dl = st * dmax;
       } else dl = st * V.lock;
+      // pomoc kontry łapie mały uślizg tyłu (najwyżej ok. 7° na kołach), ale nie trzyma bolidu bokiem na gazie:
+      // gdy tylne koła buksują za szczytem (gaz bez kontroli trakcji), pomoc znika i bolid się obraca
       if (car.csAssist && avx > 6) {
         var be = Math.atan2(vy, avx), ex = be - clamp(be, -0.05, 0.05);
-        dl += 0.75 * ex;
+        var kqC = Math.max(s.kap[2], s.kap[3]) / (tp.kp / q.kB);
+        dl += clamp(0.75 * ex, -0.12, 0.12) * (1 - clamp((kqC - 1.3) / 1.2, 0, 1));
       }
       // pad i klawiatura: lekkie wygładzenie; kierownica wprost
       if (!car.inWheel) dl = s.dlt + (dl - s.dlt) * Math.min(1, 18 * dt);
@@ -461,6 +468,10 @@
       var sR = Math.abs(vy - V.b * r) / (avx * tp.apR), rPath = s.ay / avx;
       var rot = r * rPath >= 0 ? Math.abs(r) - Math.abs(rPath) - 0.08 : Math.abs(r) - 0.08;
       var cut = Math.max(rot > 0 ? rot * 3 : 0, (sR - 1.25) * 1.5);
+      // tył w poślizgu i koła buksują za szczytem: częściowe odjęcie momentu nie wystarcza (koło na opadającej
+      // części krzywej kręci się dalej), więc moment w dół, aż koła wrócą do szczytu
+      var kqS = Math.max(s.kap[2], s.kap[3]) / (tp.kp / q.kB);
+      if ((rot > 0 || sR > 1) && kqS > 1.2) cut = Math.max(cut, (kqS - 1.2) * 2.5);
       if (cut > 0) Tin *= clamp(1 - cut, 0, 1);
     }
     // dyferencjał sprzęgłowy: różnica obrotów zamknięta momentem blokady
