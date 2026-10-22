@@ -30,7 +30,7 @@ PG.MONZA = {
   ],
   // dodatkowe wygładzenie zgrubnych danych w zakrętach: [od punktu, do punktu, liczba przejść]
   smooth: [[2, 13, 12], [16, 34, 40], [34, 45, 14], [45, 57, 120], [57, 64, 220], [73, 91, 140], [93, 118, 160]],
-  km: 5.793, lapS: 85, laps: 53,
+  km: 5.793, lapS: 92, laps: 53,
   // rozkład toru: [nazwa zakrętu, przesunięcie w metrach]; start — prosta startowa, first — pierwszy zakręt za metą
   layout: {
     start: 'Rettifilo Tribune', first: 'Prima Variante',
@@ -96,7 +96,7 @@ PG.KINGSMOOR = {
     { name: 'Pit Straight', p: 126, type: 'S' }
   ],
   smooth: [[0, 8, 40], [12, 30, 80], [35, 46, 40], [56, 70, 60], [71, 83, 60], [95, 105, 60], [113, 127, 60]],
-  km: 5.891, lapS: 100, laps: 52,
+  km: 5.891, lapS: 113, laps: 52,
   layout: {
     start: 'Pit Straight', first: 'Spinney',
     sectors: [['Runway Straight', 150], ['Hamlet', 100]],
@@ -156,7 +156,7 @@ PG.ALRIMAL = {
     { name: 'Pit Straight', p: 90, type: 'S' }
   ],
   smooth: [[1, 8, 20], [13, 21, 30], [21, 35, 40], [43, 52, 80], [56, 66, 40], [66, 84, 40], [84, 91, 60]],
-  km: 5.412, lapS: 97, laps: 57,
+  km: 5.412, lapS: 106, laps: 57,
   layout: {
     start: 'Pit Straight', first: 'Oasis',
     sectors: [['Dune Straight', 250], ['Mirage Straight', 200]],

@@ -1113,8 +1113,8 @@
     ['high', 'Duży docisk', { fw: 9, rw: 10, top: 345 }],
     ['wet', 'Deszcz', { fw: 10, rw: 11, top: 340, sprF: 4, sprR: 4, arbF: 4, arbR: 3, rhF: 7, rhR: 8, diffP: 30, diffC: 20, bias: 56, press: 5 }]
   ];
-  // Szacunek osiągów z tych samych tablic co fizyka i AI (obwiednia przyczepności i profil prędkości)
-  function setupStats(o, su) {
+  // Szacunek osiągów z tych samych tablic co fizyka i AI (obwiednia przyczepności i profil prędkości) na torze T
+  function setupStats(o, su, T) {
     var p = PG.carParams(o.team, o.driver), V = PG.Veh;
     var gm = p.gripMul * PG.baseGrip({ compound: o.wet ? 'W' : 'M' }, { wet: !!o.wet });
     var pp = { power: p.power, cd: p.cd, gripMul: gm, aeroMul: p.aeroMul, brakeMul: 1, setup: su };
@@ -1125,14 +1125,17 @@
     }
     var q = V.prep(p, su);
     return { vmax: vmax * 3.6, lat1: V.envAt(E.lat, 150 / 3.6) / 9.81, lat2: V.envAt(E.lat, 250 / 3.6) / 9.81, brk: V.envAt(E.brk, 250 / 3.6) / 9.81,
-      aeroF: q.ClF / (q.ClF + q.ClR), lap: PG.speedProfile(G.T, pp).lapTime };
+      aeroF: q.ClF / (q.ClF + q.ClR), lap: PG.speedProfile(T, pp).lapTime };
   }
+  // tor do statystyk setupu: bieżący albo zbudowany raz dla innego wybranego toru
+  var statTracks = {};
+  function statTrack(td) { return G.T && G.T.def === td ? G.T : statTracks[td.id] || (statTracks[td.id] = PG.buildTrack(td)); }
   // opts: { team, driver, wet, live (zmiana w trakcie sesji), track (inny niż obecny), onClose }
   UI.setupOverlay = function (o) {
     var old = document.getElementById('setupov');
     if (old) old.remove();
     var track = o.track || (G.trackId ? G.trackId() : 'monza'), td = trackDef(track);
-    var saved = G.getSetup(track), su = PG.Veh.cleanSetup(saved || PG.SETUP_DEF), base = null;
+    var saved = G.getSetup(track), su = PG.Veh.cleanSetup(saved || PG.SETUP_DEF), base = null, sT = statTrack(td);
     var ov = h('div', { class: 'screen solid', id: 'setupov', style: 'background:rgba(14,26,31,0.9);z-index:30;overflow:auto' });
     var w = h('div', { class: 'wrap', style: 'max-width:1060px' });
     var close = function () { ov.remove(); if (o.onClose) o.onClose(); if (o.live && PG.Pad && PG.Pad.connected) { var r = document.querySelector('#pause button.primary'); if (r) UI.padFocus(r); } };
@@ -1141,8 +1144,8 @@
     var g2 = h('div', { class: 'grid2' }), left = h('div', { class: 'panel col' }), right = h('div', { class: 'panel col' });
     var inputs = {}, stats = h('div', { class: 'kv' });
     function upStats() {
-      var x = setupStats(o, su);
-      if (!base) base = setupStats(o, PG.Veh.cleanSetup(PG.SETUP_DEF));
+      var x = setupStats(o, su, sT);
+      if (!base) base = setupStats(o, PG.Veh.cleanSetup(PG.SETUP_DEF), sT);
       var d = x.lap - base.lap;
       stats.innerHTML = '';
       [['Prędkość maks.', Math.round(x.vmax) + ' km/h'], ['Przyczepność 150 km/h', x.lat1.toFixed(2) + ' g'], ['Przyczepność 250 km/h', x.lat2.toFixed(2) + ' g'],

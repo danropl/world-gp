@@ -176,5 +176,5 @@ W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie z
 | `js/keys.js` | przypisanie klawiszy (zapis w ciasteczku `wgp_keys`) |
 | `js/game.js` | pętla gry |
 | `serve.py`, `start.command`, `start.bat` | lokalny serwer bez pamięci podręcznej i uruchamianie z aktualizacją |
-| `tools/veh-tests.js`, `tools/physics-bench.js` | testy fizyki w Node (przyspieszanie, hamowanie, skidpad, wyścigi AI): `node tools/veh-tests.js` |
+| `tools/veh-tests.js`, `tools/physics-bench.js` | testy fizyki w Node (przyspieszanie, hamowanie, skidpad, wyścigi AI): `node tools/veh-tests.js`, `node tools/physics-bench.js race 3 kingsmoor` |
 | `js/ui.js` | menu, HUD, kreator, ustawienia |

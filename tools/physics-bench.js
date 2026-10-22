@@ -1,4 +1,4 @@
-// WORLD GP — test fizyki bez przeglądarki: node tools/physics-bench.js [race|tests|all] [okrążenia]
+// WORLD GP — test fizyki bez przeglądarki: node tools/physics-bench.js [race|tests|all] [okrążenia] [tor: monza|kingsmoor|alrimal]
 // Ładuje skrypty gry do jednej przestrzeni (PG) i uruchamia wyścig samych AI oraz testy bolidu.
 'use strict';
 var fs = require('fs'), path = require('path'), vm = require('vm');
@@ -9,8 +9,8 @@ var root = path.join(__dirname, '..');
   if (fs.existsSync(p)) vm.runInThisContext(fs.readFileSync(p, 'utf8'), { filename: f });
 });
 var PG = globalThis.PG;
-var T = PG.buildTrack(PG.MONZA);
 var mode = process.argv[2] || 'all', LAPS = +(process.argv[3] || 3);
+var T = PG.buildTrack((PG.TRACKS || [PG.MONZA]).find(function (d) { return d.id === process.argv[4]; }) || PG.MONZA);
 
 function entries(nPlayer, comp) {
   var out = [];
