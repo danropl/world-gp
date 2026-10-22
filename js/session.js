@@ -439,7 +439,12 @@
         if (!PG.inDRS(T, c.idx)) {
           // poza strefą: uprawnienie trwa tylko do końca najbliższej strefy
           var nearZone = false;
-          for (var z2 = 0; z2 < T.drs.length; z2++) { var zz = T.drs[z2]; var d2 = zz.from - c.idx; if (d2 < 0) d2 += T.N; if (d2 < 120) nearZone = true; }
+          // (od punktu detekcji do początku strefy bywa ponad 120 próbek: wtedy uprawnienie znikało od razu po detekcji)
+          for (var z2 = 0; z2 < T.drs.length; z2++) {
+            var zz = T.drs[z2], d2 = zz.from - c.idx, dz = zz.from - zz.detect;
+            if (d2 < 0) d2 += T.N; if (dz < 0) dz += T.N;
+            if (d2 <= Math.max(120, dz + 3)) nearZone = true;
+          }
           if (!nearZone) c.drsAllowed = false;
         }
       } else c.drsAllowed = false;
