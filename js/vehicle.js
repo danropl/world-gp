@@ -88,13 +88,15 @@
   // ---------- OPONA ----------
   // Magic Formula: kształt krzywej g(u) = sin(C·atan(u − E·(u − atan u))), u = B·σ (1 na szczycie).
   // Stablicowana (krok 1/64) z interpolacją liniową: liczona 4–16 razy na koło w każdym kroku 2 ms.
+  // P: siła w pełnym poślizgu (ułamek szczytu), poniżej której krzywa za szczytem już nie spada. Siła boczna
+  // zostaje na 0,8 szczytu od ok. 18° kąta znoszenia: bolid w obrocie, jadący bokiem, wytraca prędkość na oponach
   var MFU = 64, MFS = 64, MFN = MFU * MFS;
-  function mfTab(C, E) {
+  function mfTab(C, E, P) {
     var t = new Float64Array(MFN + 2);
-    for (var k = 0; k <= MFN + 1; k++) { var u = k / MFS; t[k] = Math.sin(C * Math.atan(u - E * (u - Math.atan(u)))); }
+    for (var k = 0; k <= MFN + 1; k++) { var u = k / MFS; t[k] = Math.sin(C * Math.atan(u - E * (u - Math.atan(u)))); if (P && u > 2 && t[k] < P) t[k] = P; }
     return t;
   }
-  var GX = mfTab(1.7, 0.1), GY = mfTab(1.6, 0.2), BX = 1.37, BY = 1.62;
+  var GX = mfTab(1.7, 0.1), GY = mfTab(1.6, 0.2, 0.8), BX = 1.37, BY = 1.62;
   var MG = 0, MD = 0; // wartość i pochodna dg/du ostatniego odczytu
   function mfL(t, u) {
     if (u >= MFU) { MG = t[MFN]; MD = 0; return MG; }
@@ -113,7 +115,7 @@
   }
   // Siły opony w układzie koła (x do przodu, y w prawo) do TF[0], TF[1]; TF[2] = znormalizowany poślizg σ,
   // TF[3] = dFx/dκ (do półniejawnego obrotu koła). D = µ·Fz, ap = kąt szczytu, kp = poślizg szczytu, kB = sztywność (ciśnienie)
-  var TF = new Float64Array(4), GYK = 0.25;
+  var TF = new Float64Array(4), GYK = 0.7;
   function tanA(alpha) { return Math.tan(alpha < -1.45 ? -1.45 : alpha > 1.45 ? 1.45 : alpha); }
   // ta = tan(α) (liczony raz na koło w kroku)
   function tyre(D, ap, kp, kB, ta, kappa) {
@@ -125,8 +127,9 @@
     var gx = mfL(GX, cx * s), dgx = MD, gy = mfL(GY, BY * kB * s), is = 1 / s, ux = sx * is, uy = sy * is;
     // koło buksujące albo zablokowane (poślizg wzdłużny wyraźnie za szczytem) traci siłę boczną szybciej, niż
     // wynika z koła tarcia (jak funkcja wagowa Gyκ w Magic Formula): gaz bez kontroli trakcji kończy się
-    // obrotem, a nie długim driftem na kręcących się tylnych kołach
-    var ax = sx < 0 ? -sx : sx, wy = ax > 1.5 ? 1 / (1 + GYK * (ax - 1.5)) : 1;
+    // obrotem, a nie długim driftem na kręcących się tylnych kołach. Efekt słabnie z kątem znoszenia (jak w Magic
+    // Formula): bolid w obrocie, jadący bokiem, ma hamować na oponach, a nie sunąć dalej
+    var ax = sx < 0 ? -sx : sx, wy = ax > 1.5 ? 1 / (1 + GYK * Math.min(ax - 1.5, 3) / (1 + 8 * ta * ta)) : 1;
     TF[0] = D * gx * ux;
     TF[1] = -D * gy * uy * wy;
     TF[3] = D * (dgx * cx * ux * ux + gx * uy * uy * is) / kp;
@@ -406,10 +409,13 @@
     }
 
     // ---- napęd: silnik, skrzynia, sprzęgło ----
-    // automat zmienia biegi wg obrotów (prędkość tylnych kół, przy gazie z poślizgiem)
-    // (przy buksowaniu najwyżej o 25 % ponad prędkość jazdy, inaczej automat wrzuca kolejne biegi na kręcących się kołach)
-    var vWr = (s.w[2] + s.w[3]) / 2 * V.R, vShift = thr > 0 && vWr > avx ? Math.min(vWr, avx * 1.25 + 2) : avx;
+    // automat zmienia biegi wg obrotów (prędkość tylnych kół; przy buksowaniu najwyżej o 25 % ponad prędkość jazdy,
+    // inaczej automat wrzuca kolejne biegi na kręcących się kołach). Redukcja tylko bez przekręcenia silnika:
+    // w obrocie bolid jedzie bokiem (prędkość wzdłuż osi prawie zero), a kręcące się koła z silnikiem na jedynce
+    // kręciłyby się dalej przez kilka sekund i bolid sunąłby bokiem bez tarcia tylnych opon
+    var vWr = (s.w[2] + s.w[3]) / 2 * V.R, vShift = thr > 0 && vWr > avx ? Math.max(avx, Math.min(vWr, spd * 1.25 + 2)) : avx;
     var gs = q.gs, gear = car.manual && human ? (car.mgear || 1) : PG.autoGear(s.gear, vShift * 3.6 / gs);
+    if (!(car.manual && human)) while (gear < s.gear && vWr * 3.6 / gs > PG.GEAR_TOP[gear] * 0.98) gear++;
     if (gear > s.gear && !(car.manual && human)) s.shiftT = 0.03;
     if (car.manual && human && car.shiftT > 0) s.shiftT = Math.max(s.shiftT, car.shiftT);
     s.gear = gear;
@@ -418,11 +424,15 @@
     var rpm = rpmW, slipClutch = false;
     if (thr > 0 && rpmW < V.rpmLaunch && gear === 1) { rpm = Math.max(rpmW, V.rpmIdle + (V.rpmLaunch - V.rpmIdle) * thr); slipClutch = true; }
     else if (rpmW < V.rpmIdle) { rpm = V.rpmIdle; slipClutch = true; }
-    var limiter = rpmW >= V.rpmMax;
+    // obrót (bolid bokiem, bez gazu): sprzęgło otwarte jak anti-stall w F1, tylne koła toczą się z prędkością jazdy
+    // zamiast kręcić się razem z silnikiem, więc opony hamują bolid w ślizgu
+    var spinC = !slipClutch && thr < 0.05 && !reversing && spd > 3 && Math.abs(vy) > 0.7 * spd;
+    if (spinC) { rpm = V.rpmIdle; slipClutch = true; }
+    var limiter = !slipClutch && rpmW >= V.rpmMax;
     var Te = 0;
     if (reversing) Te = 0;
     else if (thr > 0 && !limiter && s.shiftT <= 0) Te = torque(rpm) * q.tq * dp.pw * thr;
-    else if (!slipClutch && avx > 4) Te = -(15 + 45 * (rpm / V.rpmMax) * (rpm / V.rpmMax)) * (1 - thr);
+    else if (!slipClutch && vWr > 4) Te = -(15 + 45 * (rpm / V.rpmMax) * (rpm / V.rpmMax)) * (1 - thr);
     if (s.shiftT > 0) s.shiftT -= dt;
     var Tin = Te * GR * (Te > 0 ? V.eff : 1);
     // bezwładność silnika na tylnych kołach przy zamkniętym sprzęgle
@@ -618,7 +628,7 @@
     s.Tb[1] += (Pb1 - hb * (s.Tb[1] - air[0])) / 3000 * dt;
     // ---- opony: temperatura i zużycie ----
     therm(car, s, tp, q, env, air, dt, 1);
-    engineOut(car, s, q, rpmW, thr, slipClutch, limiter, gear);
+    engineOut(car, s, q, spinC ? V.rpmIdle : rpmW, thr, slipClutch, limiter, gear);
   };
 
   // Skuteczność tarcz węglowych od temperatury
