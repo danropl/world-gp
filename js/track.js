@@ -95,23 +95,18 @@
     }
     T.corners = marks.filter(function (m) { return m.type === 'A'; }).map(function (m) { return { name: m.name, i: Math.round(m.s / ds) % N, s: m.s }; });
     T.straights = marks.filter(function (m) { return m.type === 'S'; }).map(function (m) { return { name: m.name, i: Math.round(m.s / ds) % N }; });
+    var Lay = T.layout = def.layout;
     buildRunoff(T);
     T.grid = gridSlots(T, 24);
-    T.sectors = [findMark(T, 'Curva del Parco 1') - Math.round(120 / ds), findMark(T, 'Variante del Lago') + Math.round(250 / ds)];
-    var parab = findMark(T, 'Curva Finale'), back = findMark(T, 'Rettifilo Centrale'), ret = findMark(T, 'Prima Variante');
-    var asc = findMark(T, 'Variante del Lago');
-    var straightF = findMark(T, 'Rettifilo Tribune');
-    T.drs = [
-      { from: wrapI(straightF + Math.round(30 / ds), N), to: wrapI(ret - Math.round(100 / ds), N), detect: wrapI(parab - Math.round(30 / ds), N) },
-      { from: wrapI(back + Math.round(60 / ds), N), to: wrapI(parab - Math.round(120 / ds), N), detect: wrapI(asc - Math.round(80 / ds), N) }
-    ];
+    T.sectors = Lay.sectors.map(function (r) { return at(T, r); });
+    T.drs = Lay.drs.map(function (z) { return { from: at(T, z.from), to: at(T, z.to), detect: at(T, z.detect) }; });
     // prosta startowa: ściana boksów po prawej, trybuny po lewej
-    T.mainFrom = wrapI(straightF - Math.round(20 / ds), N);
-    T.mainTo = wrapI(ret - Math.round(140 / ds), N);
+    T.mainFrom = at(T, [Lay.start, -20]);
+    T.mainTo = at(T, Lay.mainTo);
     for (var mi = T.mainFrom; mi !== T.mainTo; mi = wrapI(mi + 1, N)) { T.barR[mi] = Math.min(T.barR[mi], T.hw + 3); T.barL[mi] = Math.min(T.barL[mi], T.hw + 6); }
     // aleja serwisowa po prawej stronie prostej startowej (pas hw+4,2 … hw+13 za murem, garaże dalej):
-    // zjazd za Curva Finale, ograniczenie 80 km/h tylko przy garażach, wyjazd przed Rettifilo
-    var pitFrom = wrapI(T.mainFrom + Math.round(40 / ds), N), pitTo = wrapI(ret - Math.round(180 / ds), N), gar0 = wrapI(-Math.round(260 / ds), N);
+    // zjazd za ostatnim zakrętem, ograniczenie 80 km/h tylko przy garażach, wyjazd przed pierwszym zakrętem
+    var pitFrom = wrapI(T.mainFrom + Math.round(40 / ds), N), pitTo = at(T, Lay.pit.to), gar0 = wrapI(Math.round(Lay.pit.garage / ds), N);
     T.pit = {
       entry: wrapI(pitFrom - Math.round(150 / ds), N), from: pitFrom, to: pitTo, exit: wrapI(pitTo + Math.round(110 / ds), N),
       garage0: gar0, limFrom: wrapI(gar0 - Math.round(40 / ds), N), limTo: wrapI(gar0 + Math.round(370 / ds), N),
@@ -131,6 +126,9 @@
     return 0;
   }
   PG.findMark = findMark;
+  // Indeks próbki z odwołania [nazwa zakrętu, przesunięcie w metrach]
+  function at(T, r) { return wrapI(findMark(T, r[0]) + Math.round(r[1] / T.ds), T.N); }
+  PG.trackAt = at;
 
   function buildRunoff(T) {
     var N = T.N, ds = T.ds;
@@ -168,13 +166,15 @@
         else { T.surfR[i4] = 1; T.barR[i4] = Math.max(T.barR[i4], depth + 6); }
       }
     }
-    // Curva Finale i Prima Variante: asfaltowe pobocza
-    var par = findMark(T, 'Curva Finale');
-    for (var p = par - Math.round(80 / T.ds); p < par + Math.round(420 / T.ds); p++) { var q = wrapI(p, N); if (T.surfL[q] === 1) T.surfL[q] = 2; T.barL[q] = Math.max(T.barL[q], 44); }
-    var ret = findMark(T, 'Prima Variante');
-    for (var r = ret - Math.round(150 / T.ds); r < ret + Math.round(60 / T.ds); r++) { var q2 = wrapI(r, N); T.surfL[q2] = 2; T.surfR[q2] = 2; T.barL[q2] = Math.max(T.barL[q2], 38); T.barR[q2] = Math.max(T.barR[q2], 30); }
-    // prosta startowa: wąskie pobocza i ściana boksów po prawej
-    var startF = findMark(T, 'Rettifilo Tribune');
+    // asfaltowe pobocza w wybranych zakrętach (layout.runoff)
+    T.layout.runoff.forEach(function (ro) {
+      var c = findMark(T, ro.at);
+      for (var p = c + Math.round(ro.from / T.ds); p < c + Math.round(ro.to / T.ds); p++) {
+        var q = wrapI(p, N);
+        if (ro.L) { if (ro.all || T.surfL[q] === 1) T.surfL[q] = 2; T.barL[q] = Math.max(T.barL[q], ro.L); }
+        if (ro.R) { if (ro.all || T.surfR[q] === 1) T.surfR[q] = 2; T.barR[q] = Math.max(T.barR[q], ro.R); }
+      }
+    });
     // wygładzenie odległości barier
     [T.barL, T.barR].forEach(function (arr) {
       for (var pass = 0; pass < 3; pass++) {

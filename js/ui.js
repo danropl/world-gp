@@ -809,10 +809,12 @@
   };
 
   // dystans, zużycie opon (auto: krótszy wyścig — szybsze zużycie, by strategia miała znaczenie)
-  var LAP_OPTS = [[1, '1'], [3, '3'], [5, '5'], [10, '10'], [15, '15'], [27, '27 · ½'], [53, '53 · pełny']];
+  function lapOpts(def) { var half = Math.ceil(def.laps / 2); return [[1, '1'], [3, '3'], [5, '5'], [10, '10'], [15, '15'], [half, half + ' · ½'], [def.laps, def.laps + ' · pełny']]; }
+  UI.lapOpts = lapOpts;
   function wearAuto(laps) { return laps >= 27 ? 1 : laps >= 15 ? 1.5 : laps >= 10 ? 2 : 3; }
   UI.wearAuto = wearAuto;
-  function raceLen(laps) { var min = Math.round(laps * 85 / 60); return laps + ' okr. · ' + (laps * 5.793).toFixed(1).replace('.', ',') + ' km · ok. ' + (min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60) + ' min' : min + ' min'); }
+  // def: tor wyścigu (domyślnie bieżący)
+  function raceLen(laps, def) { def = def || (G.T ? G.T.def : PG.MONZA); var min = Math.round(laps * def.lapS / 60); return laps + ' okr. · ' + (laps * def.km).toFixed(1).replace('.', ',') + ' km · ok. ' + (min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60) + ' min' : min + ' min'); }
   UI.quick = function () {
     var s = screen('quick', 'dim'), teams = PG.allTeams(), st = Store.data.settings;
     if (!quick.teamId || !teams.find(function (t) { return t.id === quick.teamId; })) quick.teamId = teams[0].id;
@@ -820,7 +822,9 @@
     quick.laps = st.laps; quick.diff = st.difficulty;
     quick.qf = st.qualiFormat || 'q3'; quick.wear = st.wear || 'auto'; quick.inc = st.incidents || 'rare';
     var w = h('div', { class: 'wrap' });
-    var td = trackDef(quick.track);
+    var td = trackDef(quick.track), lops = lapOpts(td);
+    // dystans spoza listy tego toru (np. pełny dystans innego toru): najbliższa opcja
+    if (!lops.some(function (o) { return o[0] === quick.laps; })) quick.laps = lops.reduce(function (a, o) { return Math.abs(o[0] - quick.laps) < Math.abs(a - quick.laps) ? o[0] : a; }, lops[0][0]);
     w.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' }, h('div', { class: 'row', style: 'gap:14px;flex-wrap:nowrap' }, h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Menu', title: 'Menu', text: '←', onclick: UI.menu }), h('h2', { text: 'Szybki wyścig' })),
       h('button', { type: 'button', class: 'trackchip', onclick: function () { UI.trackPick(UI.quick, UI.quick); } }, trackOutline(td, 64, 40), h('span', { class: 'col', style: 'gap:0' }, h('small', { class: 'muted', text: 'Tor · zmień' }), h('b', { text: td.name })))));
     var g2 = h('div', { class: 'split-aside' });
@@ -837,11 +841,11 @@
       var sel = h('select', { id: 'qDriver', onchange: function () { quick.driverIdx = isNaN(+sel.value) ? sel.value : +sel.value; renderRight(); } });
       opts.forEach(function (o) { sel.appendChild(h('option', { value: o[0], text: o[1], selected: String(o[0]) === String(quick.driverIdx) })); });
       right.appendChild(h('label', { class: 'field' }, 'Kierowca', sel));
-      var lenNote = h('span', { class: 'muted', style: 'font-size:13px', text: raceLen(quick.laps) });
+      var lenNote = h('span', { class: 'muted', style: 'font-size:13px', text: raceLen(quick.laps, td) });
       var sum = h('span', { class: 'muted' });
-      var upd = function () { sum.textContent = raceLen(quick.laps).split(' · ')[0] + ' · ' + ({ sun: 'słońce', cloud: 'chmury', rain: 'deszcz' })[quick.weather]; };
+      var upd = function () { sum.textContent = raceLen(quick.laps, td).split(' · ')[0] + ' · ' + ({ sun: 'słońce', cloud: 'chmury', rain: 'deszcz' })[quick.weather]; };
       upd();
-      right.appendChild(h('label', { class: 'field' }, 'Dystans wyścigu', seg(LAP_OPTS, quick.laps, function (v) { quick.laps = v; st.laps = v; Store.save(); lenNote.textContent = raceLen(v); upd(); }), lenNote));
+      right.appendChild(h('label', { class: 'field' }, 'Dystans wyścigu', seg(lops, quick.laps, function (v) { quick.laps = v; st.laps = v; Store.save(); lenNote.textContent = raceLen(v, td); upd(); }), lenNote));
       right.appendChild(h('label', { class: 'field' }, 'Kwalifikacje', seg([['q3', 'Q1 · Q2 · Q3'], ['one', 'Jedno okrążenie']], quick.qf, function (v) { quick.qf = v; st.qualiFormat = v; Store.save(); })));
       right.appendChild(h('label', { class: 'field' }, 'Zużycie opon', seg([['auto', 'Auto'], [1, 'Realne'], [2, '×2'], [4, '×4']], quick.wear, function (v) { quick.wear = v; st.wear = v; Store.save(); })));
       right.appendChild(h('label', { class: 'field' }, 'Samochód bezpieczeństwa i awarie', seg(PG.RC ? PG.RC.LEVELS : [['rare', 'Rzadko']], quick.inc, function (v) { quick.inc = v; st.incidents = v; Store.save(); })));
@@ -1057,7 +1061,7 @@
     g2.appendChild(h('div', { class: 'panel col' }, h('h3', { text: 'Klasyfikacja wyścigu' }), h('div', { class: 'tblwrap' }, tbl)));
     var side = h('div', { class: 'panel col' });
     if (mine) { // widz online: bez własnego wyniku
-      var verdict = mine.pos === 1 ? 'Zwycięstwo na Monzy!' : mine.pos <= 3 ? 'Podium!' : mine.pos <= 10 ? 'Punkty!' : 'Bez punktów';
+      var verdict = mine.pos === 1 ? 'Zwycięstwo!' : mine.pos <= 3 ? 'Podium!' : mine.pos <= 10 ? 'Punkty!' : 'Bez punktów';
       side.appendChild(h('div', { class: 'row' }, h('span', { class: 'big-pos', text: 'P' + mine.pos }), h('div', { class: 'col', style: 'gap:2px' }, h('b', { text: verdict }), h('span', { class: 'muted', text: 'Start z P' + grid + ' · najlepsze okr. ' + PG.fmtTime(mine.best) }))));
     }
     if (ctx.mp) {
@@ -1530,7 +1534,7 @@
     } else {
       var p3 = h('div', { class: 'panel col', style: 'max-width:560px' });
       p3.appendChild(h('h3', { text: 'Sezon' }));
-      p3.appendChild(h('p', { text: PG.CALENDAR.length + ' rund na Monzy, każda z kwalifikacjami i wyścigiem. Pogoda zmienia się między rundami.' }));
+      p3.appendChild(h('p', { text: PG.CALENDAR.length + ' rund na torze Parco, każda z kwalifikacjami i wyścigiem. Pogoda zmienia się między rundami.' }));
       p3.appendChild(h('label', { class: 'field' }, 'Poziom rywali', seg([['easy', 'Łatwy'], ['normal', 'Normalny'], ['hard', 'Trudny']], wiz.difficulty, function (v) { wiz.difficulty = v; })));
       p3.appendChild(h('label', { class: 'field' }, 'Długość wyścigu', seg([[3, '3 okr.'], [5, '5 okr.'], [10, '10 okr.']], wiz.laps, function (v) { wiz.laps = v; })));
       p3.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', text: '← Wstecz', onclick: function () { wiz.step = 2; UI.careerStep(); } }),
@@ -1661,7 +1665,7 @@
     var f = h('div', { class: 'panel col' }, h('h3', { text: 'Kierunek rozwoju' }),
       h('p', { text: 'Po każdej rundzie inżynierowie przynoszą nowe części. Wybrany obszar rozwija się szybciej.' }),
       seg([['power', 'Silnik'], ['aero', 'Aerodynamika'], ['tyre', 'Opony']], car.focus, function (v) { car.focus = v; Store.save(); UI.toast('Inżynierowie skupią się na tym obszarze'); }),
-      h('p', { class: 'muted', style: 'font-size:14px', text: 'Silnik daje prędkość na prostych Monzy, aerodynamika szybsze zakręty i hamowanie, opony mniejsze zużycie i więcej przyczepności.' }));
+      h('p', { class: 'muted', style: 'font-size:14px', text: 'Silnik daje prędkość na prostych, aerodynamika szybsze zakręty i hamowanie, opony mniejsze zużycie i więcej przyczepności.' }));
     if (car.mode === 'owner') f.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Jako właściciel możesz też kupić ulepszenie od razu. Koszt rośnie z poziomem części.' }));
     body.appendChild(f);
   }

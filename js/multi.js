@@ -828,7 +828,7 @@
       }
       var setP = h('div', { class: 'col', style: 'gap:8px' }, h('h3', { text: 'Wyścig' }));
       setP.appendChild(opt('Tor', 'track', (PG.TRACKS || [PG.MONZA]).map(function (t) { return [t.id, t.short || t.name]; })));
-      setP.appendChild(opt('Dystans', 'laps', [[3, '3'], [5, '5'], [10, '10'], [15, '15'], [27, '27 · ½'], [53, '53 · pełny']]));
+      setP.appendChild(opt('Dystans', 'laps', U().lapOpts ? U().lapOpts(PG.trackDef(c.track)).slice(1) : [[3, '3'], [5, '5'], [10, '10'], [15, '15'], [27, '27 · ½'], [53, '53 · pełny']]));
       setP.appendChild(opt('Pogoda', 'weather', [['sun', 'Słońce'], ['cloud', 'Chmury'], ['rain', 'Deszcz']]));
       setP.appendChild(opt('Kwalifikacje', 'quali', [['q3', 'Q1·Q2·Q3'], ['one', '1 okrążenie'], ['none', 'Bez (symulacja)']]));
       setP.appendChild(opt('Bolidy AI', 'ai', [[true, 'Pełna stawka'], [false, 'Tylko gracze']]));
@@ -955,7 +955,7 @@
       var b = h('button', { type: 'button', class: 'primary', text: 'Gotowy na start', onclick: function () { if (sent) return; sent = true; M.sendTyre(comp); b.disabled = true; b.textContent = 'Czekam na pozostałych…'; } });
       side.appendChild(b);
     }
-    side.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Wyścig: ' + U().raceLen(M.cfg.laps) + '. Start, gdy wszyscy potwierdzą (najpóźniej za 40 s). Zjazd do boksu: B (pad: L1), opony 1–4.' }));
+    side.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Wyścig: ' + U().raceLen(M.cfg.laps, PG.trackDef ? PG.trackDef(M.cfg.track) : null) + '. Start, gdy wszyscy potwierdzą (najpóźniej za 40 s). Zjazd do boksu: B (pad: L1), opony 1–4.' }));
     g2.appendChild(side); w.appendChild(g2); s.appendChild(w);
   };
   // Wyniki online

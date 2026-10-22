@@ -493,7 +493,7 @@
     if (p.inPit) { G.msg('', 'Już jesteś w alei serwisowej', '', 1.4); return; }
     PG.Pit.request(p, S, !p.pitReq);
     var T = PG.TYRES[p.pitComp] || PG.TYRES.M;
-    if (p.pitReq) G.msg('BOX, BOX', 'Zjazd na wjeździe za Parabolicą · opony: ' + T.name + ' (1–4' + (padConnected() ? ' / krzyżak ▲▼' : '') + ')', '', 3);
+    if (p.pitReq) G.msg('BOX, BOX', 'Zjazd do alei przed prostą startową · opony: ' + T.name + ' (1–4' + (padConnected() ? ' / krzyżak ▲▼' : '') + ')', '', 3);
     else G.msg('', 'Odwołano zjazd do boksu', '', 1.6);
   };
   G.pickComp = function (k) {

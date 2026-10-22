@@ -136,10 +136,9 @@
     }
     function bbox(o) { var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; o.pts.forEach(function (p) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }); o.bb = [x0, y0, x1, y1]; }
     var ds = T.ds, m = function (v) { return Math.round(v / ds); };
-    var ret = PG.findMark(T, 'Prima Variante'), par = PG.findMark(T, 'Curva Finale');
-    var asc = PG.findMark(T, 'Variante del Lago'), rog = PG.findMark(T, 'Seconda Variante'), les1 = PG.findMark(T, 'Curva del Parco 1');
+    var Lay = T.layout;
     // aleja serwisowa po prawej stronie prostej startowej
-    var p0 = T.pit ? T.pit.from : wrapI(T.mainFrom + m(40), N), p1 = T.pit ? T.pit.to : wrapI(ret - m(180), N);
+    var p0 = T.pit.from, p1 = T.pit.to;
     if (T.pit && T.pitA) {
       // droga alei od zjazdu do wyjazdu: krawędzie zmienne (T.pitA / T.pitB z track.js)
       var pts = [], pe = T.pit.entry, px = T.pit.exit, pi;
@@ -149,7 +148,7 @@
     } else band(p0, p1, hw + 4.2, hw + 13, 'pitlane');
     band(p0, p1, hw + 3, hw + 4.2, 'wall');
     // budynek boksów z garażami
-    var gStart = wrapI(-m(260), N);
+    var gStart = T.pit.garage0;
     band(gStart, wrapI(gStart + m(330), N), hw + 13, hw + 30, 'roof');
     this.garages = [];
     var teams = PG.garageTeams || [];
@@ -158,31 +157,34 @@
     band(gStart, wrapI(gStart + m(330), N), hw + 30, hw + 75, 'paddock');
     for (var k2 = 0; k2 < teams.length; k2++) rect(wrapI(gStart + m(14 + k2 * 30), N), hw + 40, hw + 58, 0, 18, 'motorhome', { team: teams[k2] });
     // trybuna główna i trybuny przy zakrętach
-    band(wrapI(-m(330), N), wrapI(m(260), N), -hw - 10, -hw - 34, 'stand');
-    band(wrapI(-m(330), N), wrapI(m(260), N), -hw - 34, -hw - 40, 'standroof');
-    band(wrapI(ret - m(160), N), wrapI(ret + m(10), N), T.barL[ret] + 6, T.barL[ret] + 26, 'stand');
-    band(wrapI(par + m(120), N), wrapI(par + m(420), N), -T.barL[wrapI(par + m(250), N)] - 6, -T.barL[wrapI(par + m(250), N)] - 26, 'stand');
-    band(wrapI(asc - m(60), N), wrapI(asc + m(90), N), T.barR[asc] + 6, T.barR[asc] + 22, 'stand');
-    band(wrapI(rog - m(120), N), wrapI(rog + m(20), N), -T.barL[rog] - 6, -T.barL[rog] - 22, 'stand');
-    band(wrapI(les1 - m(40), N), wrapI(les1 + m(80), N), -T.barL[les1] - 8, -T.barL[les1] - 24, 'stand');
-    // podium nad aleją serwisową, tuż za metą (jak na Monzy)
+    var ms = Lay.mainStand;
+    band(wrapI(m(ms[0]), N), wrapI(m(ms[1]), N), -hw - 10, -hw - 34, 'stand');
+    band(wrapI(m(ms[0]), N), wrapI(m(ms[1]), N), -hw - 34, -hw - 40, 'standroof');
+    // side 1: prawa strona (odległość od bariery bar), -1: lewa
+    Lay.stands.forEach(function (st) {
+      var c = PG.findMark(T, st.at), b = (st.bar === 'R' ? T.barR : T.barL)[wrapI(c + m(st.barAt || 0), N)];
+      band(wrapI(c + m(st.from), N), wrapI(c + m(st.to), N), st.side * (b + st.d[0]), st.side * (b + st.d[1]), 'stand');
+    });
+    // podium nad aleją serwisową, tuż za metą
     this.podium = rect(m(70), -hw + 1, hw + 30, 0, 14, 'podium');
     sc.pop();
-    // stary owal: most nad prostą Serraglio
-    var ser = PG.findMark(T, 'Rettifilo dei Pini');
-    this.bridgeI = wrapI(ser + m(330), N);
-    var bi = this.bridgeI, ang = Math.atan2(T.ty[bi], T.tx[bi]) + 1.15;
-    var bank = [];
-    for (var s = -520; s <= 520; s += 10) {
-      var bend = s * s * 0.00055 * (s > 0 ? 1 : -1);
-      bank.push([T.x[bi] + Math.cos(ang) * s - Math.sin(ang) * bend, T.y[bi] + Math.sin(ang) * s + Math.cos(ang) * bend]);
+    // stary owal: most nad prostą (tylko tor z owalem)
+    this.banking = []; this.bridge = null;
+    if (Lay.oval) {
+      this.bridgeI = wrapI(PG.findMark(T, Lay.oval.at) + m(Lay.oval.off), N);
+      var bi = this.bridgeI, ang = Math.atan2(T.ty[bi], T.tx[bi]) + Lay.oval.ang;
+      var bank = [];
+      for (var s = -520; s <= 520; s += 10) {
+        var bend = s * s * 0.00055 * (s > 0 ? 1 : -1);
+        bank.push([T.x[bi] + Math.cos(ang) * s - Math.sin(ang) * bend, T.y[bi] + Math.sin(ang) * s + Math.cos(ang) * bend]);
+      }
+      this.banking = bank;
+      this.bridge = { x: T.x[bi], y: T.y[bi], ang: ang };
     }
-    this.banking = bank;
-    this.bridge = { x: T.x[bi], y: T.y[bi], ang: ang };
     // tablice odliczające przed hamowaniem
     this.boards = [];
     var self2 = this;
-    [ret, par, rog, asc].forEach(function (ci) {
+    Lay.boards.map(function (n) { return PG.findMark(T, n); }).forEach(function (ci) {
       [200, 150, 100, 50].forEach(function (d) { self2.boards.push({ p: P(wrapI(ci - m(d), N), -hw - 2.4), h: Math.atan2(T.ty[ci], T.tx[ci]), n: d }); });
     });
     // spatial culling
@@ -194,7 +196,7 @@
     function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
     var bb = T.bbox, M = 260;
     var x0 = bb.minx - M, y0 = bb.miny - M, w = bb.maxx - bb.minx + 2 * M, h = bb.maxy - bb.miny + 2 * M;
-    var count = Math.round(w * h / 38);
+    var count = Math.round(w * h / 38 * (T.def.trees || 1));
     var sc = this.scenery;
     for (var k = 0; k < count; k++) {
       var x = x0 + rnd() * w, y = y0 + rnd() * h;
