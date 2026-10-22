@@ -1497,8 +1497,11 @@
       if (pts.length < 4 || pts.length % 2) return;
       var E = edges(pts), F = E.F, Bk = E.B, n = E.n;
       for (var k = 0; k + 1 < n; k++) {
-        [[F, Bk], [Bk, F]].forEach(function (pr) {
+        // linia wewnętrzna wg o.line (render.js), bo przed odbojnicami asfalt sięga aż do krawędzi toru
+        [[o.line && o.line.length === n && F[0] === pts[0] ? o.line : F, Bk], [Bk, F]].forEach(function (pr, side) {
           var A = pr[0], O = pr[1];
+          // zewnętrzna linia dopiero tam, gdzie droga odeszła od toru (bez trzech linii w jednym miejscu na początku zjazdu)
+          if (side && Math.min(Math.hypot(Bk[k][0] - F[k][0], Bk[k][1] - F[k][1]), Math.hypot(Bk[k + 1][0] - F[k + 1][0], Bk[k + 1][1] - F[k + 1][1])) < 1.6) return;
           var d0x = O[k][0] - A[k][0], d0z = O[k][1] - A[k][1], l0 = Math.hypot(d0x, d0z) || 1;
           var d1x = O[k + 1][0] - A[k + 1][0], d1z = O[k + 1][1] - A[k + 1][1], l1 = Math.hypot(d1x, d1z) || 1;
           var w = 0.22, e = 0.25;

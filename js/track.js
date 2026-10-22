@@ -190,7 +190,7 @@
   // Droga zjazdu i wyjazdu z alei: odchodzi od prawej krawędzi toru (pitA/pitB — wewnętrzna i zewnętrzna krawędź,
   // odsunięcie od osi toru), oddzielona trawiastym klinem i murem alei zakończonym odbojnicą (noseIn / noseOut).
   // Bariera prawa przed odbojnicą biegnie za drogą, od odbojnicy do odbojnicy to mur alei (jak na prostej startowej).
-  // surfR = 3: droga alei (asfalt między pitA i pitB, trawa poza nią).
+  // surfR = 3: droga alei (asfalt między pitA i pitB, trawa poza nią); przed odbojnicą pitA sięga krawędzi toru.
   function pitRoad(T) {
     var P = T.pit, N = T.N, hw = T.hw, ds = T.ds;
     var A = T.pitA = new Float32Array(N), B = T.pitB = new Float32Array(N);
@@ -211,11 +211,16 @@
     for (k = 0; k <= nIn; k++) { i = wrapI(P.entry + k, N); if (A[i] - 1.2 >= hw + 1) { noseIn = i; break; } }
     for (k = 0; k <= nOut; k++) { i = wrapI(P.exit - k, N); if (A[i] - 1.2 >= hw + 1) { noseOut = i; break; } }
     P.noseIn = noseIn; P.noseOut = noseOut;
+    // klin przed odbojnicą to asfalt (ciągła nawierzchnia od krawędzi toru), oddzielony od drogi alei białą linią:
+    // pitL — linia (dawna wewnętrzna krawędź drogi), pitA — wewnętrzna krawędź asfaltu (pod krawędzią toru)
+    var L = T.pitL = Float32Array.from(A);
+    for (k = 0; k <= nIn; k++) { i = wrapI(P.entry + k, N); if (i === noseIn) break; A[i] = hw - 0.1; }
+    for (k = 0; k <= nOut; k++) { i = wrapI(P.exit - k, N); if (i === noseOut) break; A[i] = hw - 0.1; }
     var wall = wrapI(noseOut - noseIn, N);
     for (k = 0; k <= span; k++) {
       i = wrapI(P.entry + k, N);
       var inWall = wrapI(i - noseIn, N) <= wall;
-      if (inWall) T.barR[i] = Math.min(T.barR[i], A[i] - 1.2);  // mur alei (lico od strony toru)
+      if (inWall) T.barR[i] = Math.min(T.barR[i], L[i] - 1.2);  // mur alei (lico od strony toru)
       else T.barR[i] = Math.max(T.barR[i], B[i] + 6);          // przed odbojnicą: bariera za drogą
       if (wrapI(i - P.from, N) > wrapI(P.to - P.from, N)) { T.surfR[i] = 3; T.kerbR[i] = 0; }
     }
