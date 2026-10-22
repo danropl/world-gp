@@ -3,7 +3,7 @@ var PG = (typeof window !== 'undefined' ? (window.PG = window.PG || {}) : (globa
 
 // Wersja gry: widoczna w menu; w multiplayer host przyjmuje tylko graczy z tą samą wersją. Zmieniaj przy każdej
 // aktualizacji razem z ?v= w znacznikach <script> w index.html (wtedy przeglądarka nie użyje starych plików z pamięci).
-PG.VERSION = '2026.10.18.13';
+PG.VERSION = '2026.10.22.1';
 
 // Tor Parco: fikcyjna nazwa; oś toru z geometrii GeoJSON (bacinger/f1-circuits, it-1922, licencja MIT, patrz THIRD_PARTY_NOTICES.md),
 // przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.
@@ -29,11 +29,166 @@ PG.MONZA = {
     { name: 'Rettifilo Tribune', p: 117, type: 'S' }
   ],
   // dodatkowe wygładzenie zgrubnych danych w zakrętach: [od punktu, do punktu, liczba przejść]
-  smooth: [[2, 13, 12], [16, 34, 40], [34, 45, 14], [45, 57, 120], [57, 64, 220], [73, 91, 140], [93, 118, 160]]
+  smooth: [[2, 13, 12], [16, 34, 40], [34, 45, 14], [45, 57, 120], [57, 64, 220], [73, 91, 140], [93, 118, 160]],
+  km: 5.793, lapS: 85, laps: 53,
+  // rozkład toru: [nazwa zakrętu, przesunięcie w metrach]; start — prosta startowa, first — pierwszy zakręt za metą
+  layout: {
+    start: 'Rettifilo Tribune', first: 'Prima Variante',
+    sectors: [['Curva del Parco 1', -120], ['Variante del Lago', 250]],
+    drs: [
+      { from: ['Rettifilo Tribune', 30], to: ['Prima Variante', -100], detect: ['Curva Finale', -30] },
+      { from: ['Rettifilo Centrale', 60], to: ['Curva Finale', -120], detect: ['Variante del Lago', -80] }
+    ],
+    // aleja serwisowa: koniec alei przed pierwszym zakrętem, początek garaży względem mety (m)
+    pit: { to: ['Prima Variante', -180], garage: -260 },
+    mainTo: ['Prima Variante', -140],
+    // asfaltowe pobocza: L/R — najmniejsza odległość bariery; all — asfalt także tam, gdzie była trawa
+    runoff: [
+      { at: 'Curva Finale', from: -80, to: 420, L: 44 },
+      { at: 'Prima Variante', from: -150, to: 60, L: 38, R: 30, all: true }
+    ],
+    // trybuna główna (od, do względem mety) i trybuny przy zakrętach: side 1 — prawa, -1 — lewa; d — odległość od bariery
+    mainStand: [-330, 260],
+    stands: [
+      { at: 'Prima Variante', from: -160, to: 10, side: 1, bar: 'L', d: [6, 26] },
+      { at: 'Curva Finale', from: 120, to: 420, side: -1, bar: 'L', barAt: 250, d: [6, 26] },
+      { at: 'Variante del Lago', from: -60, to: 90, side: 1, bar: 'R', d: [6, 22] },
+      { at: 'Seconda Variante', from: -120, to: 20, side: -1, bar: 'L', d: [6, 22] },
+      { at: 'Curva del Parco 1', from: -40, to: 80, side: -1, bar: 'L', d: [8, 24] }
+    ],
+    boards: ['Prima Variante', 'Curva Finale', 'Seconda Variante', 'Variante del Lago'],
+    // stary owal z mostem nad torem
+    oval: { at: 'Rettifilo dei Pini', off: 330, ang: 1.15 }
+  }
+};
+
+// Tor Kingsmoor: fikcyjna nazwa i nazwy zakrętów; oś toru z geometrii GeoJSON (bacinger/f1-circuits, gb-1948, licencja MIT,
+// patrz THIRD_PARTY_NOTICES.md), przeliczona na metry względem linii mety (stara meta na prostej przed pierwszym zakrętem).
+// Kierunek jazdy zgodny z ruchem wskazówek zegara. Dawne lotnisko: szeroki, płaski tor, mało drzew.
+PG.KINGSMOOR = {
+  id: 'kingsmoor',
+  name: 'Kingsmoor Airfield Circuit',
+  info: '5,89 km · 18 zakrętów',
+  short: 'Kingsmoor',
+  country: 'GB',
+  halfWidth: 7,
+  trees: 0.45,
+  points: [[0.0, 0.0], [186.5, -16.2], [219.6, -14.2], [245.1, -5.8], [261.7, 5.2], [281.6, 28.2], [294.1, 54.5], [304.2, 87.5], [318.4, 143.6], [332.9, 198.6], [341.4, 259.4], [345.0, 297.7], [349.9, 390.4], [351.9, 469.6], [355.2, 500.5], [366.9, 529.4], [389.1, 569.8], [398.5, 592.8], [398.1, 610.1], [394.0, 630.5], [362.5, 713.9], [360.4, 747.5], [365.3, 771.5], [376.6, 791.9], [407.8, 835.4], [415.0, 855.4], [415.8, 879.0], [410.6, 900.5], [391.6, 924.0], [367.3, 941.4], [334.1, 960.7], [308.3, 976.0], [290.0, 993.8], [269.0, 1028.9], [227.8, 1106.4], [0.8, 1524.2], [-73.6, 1640.0], [-94.6, 1668.4], [-111.6, 1683.5], [-131.4, 1693.5], [-152.1, 1698.7], [-171.0, 1697.2], [-192.1, 1692.4], [-209.9, 1684.6], [-225.7, 1672.0], [-239.0, 1652.0], [-243.1, 1644.2], [-263.3, 1600.2], [-285.9, 1560.8], [-310.2, 1528.4], [-326.8, 1508.5], [-345.4, 1488.0], [-378.2, 1454.4], [-451.4, 1366.9], [-458.7, 1362.3], [-468.8, 1361.1], [-478.8, 1365.9], [-509.6, 1393.7], [-520.1, 1397.4], [-530.6, 1396.3], [-539.5, 1392.6], [-552.1, 1380.6], [-565.4, 1366.9], [-582.0, 1344.9], [-594.1, 1321.3], [-602.7, 1297.2], [-609.9, 1270.0], [-610.7, 1259.0], [-608.7, 1247.9], [-602.7, 1237.5], [-588.1, 1214.4], [-364.8, 923.0], [-314.6, 858.5], [-304.2, 846.4], [-285.9, 834.4], [-264.1, 829.2], [-246.3, 828.6], [-221.6, 830.7], [-152.9, 841.2], [-130.2, 843.9], [-106.7, 844.9], [-80.0, 841.2], [-55.8, 835.0], [-34.0, 822.8], [108.5, 709.6], [117.7, 703.4], [129.1, 697.6], [140.8, 696.5], [149.7, 699.8], [157.8, 707.1], [162.6, 715.4], [186.9, 800.4], [194.2, 812.4], [204.3, 819.7], [216.0, 820.3], [229.0, 814.5], [237.1, 804.1], [242.3, 793.0], [252.4, 765.2], [260.5, 741.7], [266.6, 718.5], [269.8, 696.1], [271.8, 672.4], [270.2, 647.8], [265.4, 636.8], [252.9, 622.7], [-208.7, 201.3], [-221.2, 193.4], [-238.6, 184.5], [-260.0, 181.4], [-282.3, 183.9], [-304.9, 194.9], [-313.1, 204.9], [-318.7, 219.6], [-328.0, 296.1], [-333.3, 311.8], [-344.6, 324.5], [-361.6, 332.8], [-380.2, 335.5], [-400.8, 330.1], [-415.4, 320.2], [-424.2, 308.7], [-431.1, 295.1], [-432.4, 280.4], [-429.5, 264.6], [-418.2, 239.0], [-358.8, 121.1], [-339.7, 98.5], [-321.1, 79.6], [-294.4, 56.6], [-272.6, 41.4], [-245.1, 29.8], [-221.2, 22.0], [-170.6, 15.7]],
+  marks: [
+    { name: 'Spinney', p: 1, type: 'A' },
+    { name: 'Thistle', p: 13, type: 'A' },
+    { name: 'Bishops', p: 16, type: 'A' },
+    { name: 'Vicarage', p: 19, type: 'A' },
+    { name: 'Runway Straight', p: 34, type: 'S' },
+    { name: 'Lodge', p: 36, type: 'A' },
+    { name: 'Dell', p: 52, type: 'A' },
+    { name: 'Pavilion', p: 57, type: 'A' },
+    { name: 'Tower Straight', p: 70, type: 'S' },
+    { name: 'Priory', p: 72, type: 'A' },
+    { name: 'Orchard', p: 76, type: 'A' },
+    { name: 'Hamlet', p: 84, type: 'A' },
+    { name: 'The Crook', p: 91, type: 'A' },
+    { name: 'Millpond', p: 96, type: 'A' },
+    { name: 'Dispersal Straight', p: 105, type: 'S' },
+    { name: 'Kestrel', p: 106, type: 'A' },
+    { name: 'Ashby', p: 113, type: 'A' },
+    { name: 'Fernhill', p: 121, type: 'A' },
+    { name: 'Pit Straight', p: 126, type: 'S' }
+  ],
+  smooth: [[0, 8, 40], [12, 30, 80], [35, 46, 40], [56, 70, 60], [71, 83, 60], [95, 105, 60], [113, 127, 60]],
+  km: 5.891, lapS: 100, laps: 52,
+  layout: {
+    start: 'Pit Straight', first: 'Spinney',
+    sectors: [['Runway Straight', 150], ['Hamlet', 100]],
+    drs: [
+      { from: ['Runway Straight', 40], to: ['Lodge', -110], detect: ['Runway Straight', -120] },
+      { from: ['Dispersal Straight', 60], to: ['Kestrel', -110], detect: ['Dispersal Straight', -100] }
+    ],
+    // krótka prosta startowa: wyjazd z alei tuż przed Spinney
+    pit: { to: ['Spinney', -110], garage: -300 },
+    mainTo: ['Spinney', -130],
+    runoff: [
+      { at: 'Spinney', from: -60, to: 200, L: 40 },
+      { at: 'Lodge', from: -100, to: 160, L: 42 },
+      { at: 'Pavilion', from: -40, to: 220, L: 36 },
+      { at: 'Priory', from: -80, to: 80, L: 34 },
+      { at: 'Kestrel', from: -150, to: 60, L: 38, R: 30, all: true }
+    ],
+    mainStand: [-330, 110],
+    stands: [
+      { at: 'Spinney', from: 0, to: 150, side: -1, bar: 'L', barAt: 60, d: [6, 24] },
+      { at: 'Lodge', from: -60, to: 120, side: -1, bar: 'L', barAt: 40, d: [6, 24] },
+      { at: 'Pavilion', from: 40, to: 200, side: -1, bar: 'L', barAt: 100, d: [6, 22] },
+      { at: 'Kestrel', from: -120, to: 20, side: -1, bar: 'L', d: [6, 22] },
+      { at: 'Ashby', from: -20, to: 120, side: -1, bar: 'L', barAt: 50, d: [8, 26] }
+    ],
+    boards: ['Spinney', 'Lodge', 'Kestrel', 'Priory'],
+    oval: null
+  }
+};
+
+// Tor Al Rimal: fikcyjna nazwa i nazwy zakrętów; oś toru z geometrii GeoJSON (bacinger/f1-circuits, bh-2002, licencja MIT,
+// patrz THIRD_PARTY_NOTICES.md), przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.
+// Tor na pustyni: szerokie asfaltowe pobocza, prawie bez drzew.
+PG.ALRIMAL = {
+  id: 'alrimal',
+  name: 'Al Rimal Desert Circuit',
+  info: '5,41 km · 15 zakrętów',
+  short: 'Al Rimal',
+  country: 'BH',
+  halfWidth: 7.5,
+  trees: 0.08,
+  points: [[0.0, 0.0], [9.4, -337.0], [18.3, -557.8], [22.5, -567.7], [31.3, -569.2], [40.8, -566.7], [47.9, -561.4], [93.4, -515.3], [105.8, -510.6], [119.4, -511.6], [198.6, -537.3], [217.6, -539.4], [234.8, -538.3], [754.6, -437.7], [772.3, -432.4], [781.8, -422.5], [784.1, -409.9], [782.3, -397.9], [776.4, -384.3], [765.2, -370.6], [752.3, -359.6], [734.5, -345.9], [671.8, -299.3], [621.5, -247.0], [609.1, -234.8], [599.1, -217.6], [576.6, -166.7], [568.9, -155.7], [557.0, -147.9], [545.2, -141.6], [526.3, -139.4], [469.5, -148.9], [454.1, -148.3], [438.2, -145.2], [425.1, -138.4], [409.2, -123.8], [293.8, 22.5], [282.7, 32.5], [266.7, 35.0], [256.7, 27.2], [253.1, 11.5], [253.7, -12.6], [281.5, -178.2], [297.4, -282.0], [299.8, -302.5], [296.8, -321.4], [292.7, -335.5], [284.5, -349.6], [237.1, -390.5], [230.6, -393.6], [223.5, -391.6], [219.4, -384.3], [202.2, -256.3], [197.5, -170.9], [189.2, -17.3], [183.3, 143.1], [177.3, 289.3], [179.7, 313.3], [189.2, 327.6], [204.0, 335.4], [224.7, 339.6], [246.0, 338.0], [272.6, 332.8], [299.8, 319.7], [322.8, 303.5], [345.3, 280.4], [359.0, 257.9], [384.4, 191.8], [398.6, 164.0], [412.1, 147.8], [429.9, 133.1], [451.2, 120.0], [480.8, 112.6], [513.3, 112.1], [536.3, 117.4], [567.1, 132.1], [648.1, 172.4], [664.7, 184.5], [678.9, 198.6], [686.0, 211.7], [694.8, 226.4], [694.8, 239.5], [687.7, 253.1], [673.5, 266.8], [654.0, 281.4], [40.2, 625.2], [29.0, 631.0], [11.2, 631.6], [3.5, 624.2], [-23.7, 566.5], [-26.1, 543.5], [-25.5, 500.0], [-17.8, 261.5]],
+  marks: [
+    { name: 'Oasis', p: 2, type: 'A' },
+    { name: 'Palm', p: 6, type: 'A' },
+    { name: 'Dune Straight', p: 12, type: 'S' },
+    { name: 'Falcon', p: 13, type: 'A' },
+    { name: 'Caravan Esses', p: 21, type: 'A' },
+    { name: 'Souq', p: 36, type: 'A' },
+    { name: 'Lantern', p: 43, type: 'A' },
+    { name: 'Mirage Straight', p: 51, type: 'S' },
+    { name: 'Wadi', p: 56, type: 'A' },
+    { name: 'Pearl', p: 66, type: 'A' },
+    { name: 'Tower', p: 76, type: 'A' },
+    { name: 'Sand Straight', p: 84, type: 'S' },
+    { name: 'Gulf', p: 85, type: 'A' },
+    { name: 'Pit Straight', p: 90, type: 'S' }
+  ],
+  smooth: [[1, 8, 20], [13, 21, 30], [21, 35, 40], [43, 52, 80], [56, 66, 40], [66, 84, 40], [84, 91, 60]],
+  km: 5.412, lapS: 97, laps: 57,
+  layout: {
+    start: 'Pit Straight', first: 'Oasis',
+    sectors: [['Dune Straight', 250], ['Mirage Straight', 200]],
+    drs: [
+      { from: ['Pit Straight', 40], to: ['Oasis', -100], detect: ['Gulf', -20] },
+      { from: ['Dune Straight', 40], to: ['Falcon', -100], detect: ['Dune Straight', -120] },
+      { from: ['Mirage Straight', 40], to: ['Wadi', -100], detect: ['Mirage Straight', -100] }
+    ],
+    pit: { to: ['Oasis', -180], garage: -260 },
+    mainTo: ['Oasis', -140],
+    runoff: [
+      { at: 'Oasis', from: -150, to: 80, L: 42, R: 30, all: true },
+      { at: 'Falcon', from: -100, to: 120, L: 40, all: true },
+      { at: 'Souq', from: -100, to: 60, L: 36, R: 26, all: true },
+      { at: 'Lantern', from: -60, to: 120, R: 34, all: true },
+      { at: 'Wadi', from: -100, to: 150, R: 38, all: true },
+      { at: 'Gulf', from: -100, to: 80, L: 36, all: true }
+    ],
+    mainStand: [-330, 260],
+    stands: [
+      { at: 'Oasis', from: -160, to: 10, side: -1, bar: 'L', d: [6, 26] },
+      { at: 'Falcon', from: -60, to: 80, side: -1, bar: 'L', barAt: 20, d: [6, 24] },
+      { at: 'Souq', from: -120, to: 20, side: -1, bar: 'L', d: [6, 22] },
+      { at: 'Gulf', from: -80, to: 60, side: -1, bar: 'L', d: [6, 22] }
+    ],
+    boards: ['Oasis', 'Falcon', 'Souq', 'Wadi', 'Gulf'],
+    oval: null
+  }
 };
 
 // Tory do wyboru (szybki wyścig, multiplayer)
-PG.TRACKS = [PG.MONZA];
+PG.TRACKS = [PG.MONZA, PG.KINGSMOOR, PG.ALRIMAL];
 
 PG.POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
@@ -61,7 +216,8 @@ PG.NATIONS = {
   CH: { name: 'Szwajcaria', flag: ['plus', '#d52b1e', '#ffffff'] },
   TH: { name: 'Tajlandia', flag: ['h', '#a51931', '#f4f5f8', '#2d2a4a', '#2d2a4a', '#f4f5f8', '#a51931'] },
   CN: { name: 'Chiny', flag: ['dot', '#de2910', '#ffde00'] },
-  NZ: { name: 'Nowa Zelandia', flag: ['dot', '#00247d', '#cc142b'] }
+  NZ: { name: 'Nowa Zelandia', flag: ['dot', '#00247d', '#cc142b'] },
+  BH: { name: 'Bahrajn', flag: ['serrate', '#ffffff', '#ce1126'] }
 };
 
 PG.ENGINES = {

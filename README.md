@@ -1,6 +1,6 @@
 # WORLD GP
 
-Gra wyścigowa w przeglądarce w stylu bolidów z otwartymi kołami: fikcyjny tor Parco oparty na prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo własne nagrania gracza, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły, kierowcy, silniki i tor są fikcyjni.
+Gra wyścigowa w przeglądarce w stylu bolidów z otwartymi kołami: trzy fikcyjne tory oparte na prawdziwej geometrii (Parco, Kingsmoor i Al Rimal), pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo własne nagrania gracza, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły, kierowcy, silniki i tory są fikcyjni.
 
 WORLD GP to gra fanowska, niezwiązana z Formułą 1, FIA ani żadnym zespołem. Licencje bibliotek, danych toru i fontów: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -122,7 +122,7 @@ W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie z
 
 | Plik | Zawartość |
 | --- | --- |
-| `js/data.js` | zespoły, kierowcy, tor Parco, kalendarz, opony, pogoda |
+| `js/data.js` | zespoły, kierowcy, tory (oś, zakręty, rozkład: aleja, DRS, sektory, trybuny), kalendarz, opony, pogoda |
 | `js/track.js` | geometria toru |
 | `js/physics.js` | model jazdy bolidu |
 | `js/session.js` | kwalifikacje i wyścig, przeciwnicy |
