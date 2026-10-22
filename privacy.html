@@ -31,8 +31,8 @@ a { color: #ffc93c; }
 <h2>Multiplayer</h2>
 <p>Dopiero gdy otworzysz <strong>Multiplayer</strong>, gra łączy się z usługami zewnętrznymi:</p>
 <ul>
-<li><strong>Supabase</strong> (Supabase Inc., USA): lista lobby i nawiązywanie połączeń. Przetwarzane są: wpisana przez Ciebie nazwa gracza, losowy identyfikator sesji, kod lobby, wybór zespołu i kierowcy, stan wyścigu oraz Twój adres IP. Dane w kanałach nie są zapisywane w bazie i znikają po rozłączeniu.</li>
-<li><strong>WebRTC</strong>: podczas wyścigu przeglądarki graczy łączą się bezpośrednio, więc inni gracze w lobby mogą poznać Twój adres IP. Do ustalenia adresu używane są publiczne serwery STUN Google i Cloudflare.</li>
+<li><strong>Supabase</strong> (Supabase Inc., serwery we Frankfurcie): lista lobby i nawiązywanie połączeń. Gra zakłada anonimową sesję bez e-maila i hasła. W bazie zapisywane są: wpisana przez Ciebie nazwa gracza, losowy identyfikator sesji, kod i ustawienia lobby oraz Twój adres IP (do ochrony przed nadużyciami). Adresu IP nie widzą inni gracze. Kasujemy go, gdy wyjdziesz z lobby albo przestaniesz odpowiadać (najpóźniej po kilku minutach), nazwę gracza i lobby 30 minut po zakończeniu lobby, a anonimową sesję po 2 godzinach. Wybór zespołu, kierowcy i stan wyścigu płyną przez kanały i nie są zapisywane. Dzienniki techniczne Supabase mogą zawierać adres IP przez okres przechowywania dzienników usługi.</li>
+<li><strong>Cloudflare TURN</strong> (Cloudflare Inc.): podczas wyścigu dane gry idą przez serwer pośredniczący Cloudflare, więc inni gracze nie poznają Twojego adresu IP. Cloudflare przetwarza go technicznie, żeby przekazać połączenie. Gdy serwer TURN jest niedostępny, dane idą przez Supabase.</li>
 </ul>
 <p>Podstawą przetwarzania jest wykonanie usługi, o którą prosisz, czyli rozgrywki online (art. 6 ust. 1 lit. b RODO). Supabase może przetwarzać dane poza Europejskim Obszarem Gospodarczym na podstawie standardowych klauzul umownych. Jeśli nie chcesz udostępniać tych danych, nie korzystaj z trybu multiplayer.</p>
 

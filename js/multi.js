@@ -124,7 +124,7 @@
     if (M.room) { try { M.room.close(); } catch (e) { /* nic */ } }
     if (M.dir && M.isHost) { try { M.dir.advertise({}); } catch (e2) { /* nic */ } }
     clearTimeout(M.qTimer); clearTimeout(M.gTimer); clearTimeout(M.advTimer); clearTimeout(M.qAdvTimer); clearInterval(M.helloTimer); M.helloTimer = null;
-    M.fwd = {}; M.denyAt = {};
+    M.fwd = {}; M.denyAt = {}; M.kicked = {};
     M.room = null; M.L = null; M.entries = null; M.isHost = false; M.myEi = -1; M.buf = {}; M.phase = 'none'; M.snap = null; M.evq = [];
     M.q = null; M.qt = null; M.comps = null; M.loaded = null; M.seen = {}; M.missing = {}; M.lastSnap = 0;
     // synchronizacja etapów: numer ostatniego etapu (ps), weekend (wk), wersja lobby (lv), ostatnie komunikaty hosta
@@ -135,13 +135,13 @@
   // Utworzenie lobby (host)
   M.host = function (name, priv) {
     M.reset();
-    return Net.ready().then(function () {
-      var code = Net.newCode();
+    var cfg = PG.clone(DEF_CFG);
+    var st = Store.data.settings; if (st.mp && typeof st.mp === 'object') Object.keys(DEF_CFG).forEach(function (k) { if (st.mp[k] !== undefined) cfg[k] = st.mp[k]; });
+    cfg.priv = !!priv;
+    // kod nadaje serwer lobby
+    return Net.host(name, cfg).then(function (code) {
       return Net.room(code, true, handlers()).then(function (room) {
         M.room = room; M.isHost = true;
-        var cfg = PG.clone(DEF_CFG); cfg.priv = !!priv;
-        var st = Store.data.settings; if (st.mp && typeof st.mp === 'object') Object.keys(DEF_CFG).forEach(function (k) { if (st.mp[k] !== undefined) cfg[k] = st.mp[k]; });
-        cfg.priv = !!priv;
         M.L = { code: code, name: String(name || me().name + ' — lobby').slice(0, 32), host: me().id, cfg: cfg, st: 'lobby',
           players: [{ id: me().id, name: me().name, team: null, d: 0, ready: false, drv: null, link: 'host' }] };
         room.track({ id: me().id, name: me().name });
@@ -302,6 +302,13 @@
     if (M.loaded) loadedCheck();
     pushLobby();
   }
+  // host: usunięcie gracza z lobby; serwer blokuje mu powrót i dostęp do kanału
+  M.kick = function (id) {
+    if (!M.isHost || !M.L || !M.room || id === me().id) return;
+    M.kicked[id] = 1;
+    dropPlayer(id, 'usunięty przez hosta', false);
+    if (M.room) { M.room.sendTo(id, { t: 'deny', why: 'Host usunął Cię z tego lobby' }, true); M.room.kick(id); }
+  };
   // bolid gracza przejmuje AI: liczenie czasu od teraz (okrążenia z pakietu), bez rekordu z niepełnego okrążenia
   function takeOver(S, c) {
     var T = S.T, Lt = T.length, sb = T.sectors;
@@ -333,6 +340,7 @@
       if (t === 'hello') {
         if (!L) return;
         if (!pl) {
+          if (M.kicked[from]) { M.room.sendTo(from, { t: 'deny', why: 'Host usunął Cię z tego lobby' }, true); return; }
           if (m.v !== PG.VERSION) { M.room.sendTo(from, { t: 'deny', why: 'Masz inną wersję gry niż host (Ty: ' + (m.v || 'starsza') + ', host: ' + PG.VERSION + '). Zaktualizujcie obaj grę (start.command / start.bat albo git pull) i odświeżcie stronę.' }, true); return; }
           if (L.st !== 'lobby') { M.room.sendTo(from, { t: 'deny', why: 'W tym lobby trwa już wyścig' }, true); return; }
           if (L.players.length >= L.cfg.max) { M.room.sendTo(from, { t: 'deny', why: 'Lobby jest pełne' }, true); return; }
@@ -734,7 +742,7 @@
     left.appendChild(h('div', { class: 'field' }, 'Dołącz kodem', h('div', { class: 'row', style: 'flex-wrap:nowrap' }, codeIn, h('button', { type: 'button', text: 'Dołącz', onclick: function () { joinCode(codeIn.value); } }))));
     left.appendChild(status);
     left.appendChild(U().note(Net.local() ? 'Tryb testowy: lobby widzą tylko karty tej przeglądarki (parametr ?mp=local).' :
-      'Lobby i łączenie graczy działa przez Supabase Realtime, a sam wyścig — bezpośrednio między przeglądarkami (WebRTC). Gdy połączenie bezpośrednie się nie uda, dane idą przez serwer, rzadziej. Host prowadzi AI i dyrekcję wyścigu — nie przełączaj karty, gdy jesteś hostem.'));
+      'Lobby i łączenie graczy działa przez Supabase, a sam wyścig przez serwer TURN Cloudflare (WebRTC), więc gracze nie widzą swoich adresów IP. Gdy TURN jest niedostępny, dane idą przez Supabase, rzadziej. Host prowadzi AI i dyrekcję wyścigu — nie przełączaj karty, gdy jesteś hostem.'));
     var right = h('div', { class: 'panel col' }, h('h3', { text: 'Otwarte lobby' }));
     var list = h('div', { class: 'col', style: 'gap:8px' }, h('p', { class: 'muted', text: 'Łączę z serwerem…' }));
     right.appendChild(list);
@@ -817,7 +825,8 @@
           h('td', {}, (p.id === L.host ? '★ ' : '') + p.name),
           h('td', {}, t ? h('span', { class: 'teamchip', style: 'background:' + t.livery.primary }) : null, t ? t.short + ' · ' + dn : 'wybiera…'),
           h('td', {}, h('span', { class: 'pill ' + (p.ready || p.id === L.host ? 'green' : ''), text: p.id === L.host ? 'host' : p.ready ? 'gotowy' : 'czeka' })),
-          h('td', { class: 'muted', text: p.id === L.host ? '' : p.link === 'p2p' ? 'bezpośrednie' : p.link === 'relay' ? 'przez serwer' : 'łączenie…' })));
+          h('td', { class: 'muted' }, p.id === L.host ? '' : p.link === 'p2p' ? (Net.local() ? 'bezpośrednie' : 'TURN') : p.link === 'relay' ? 'przez Supabase' : 'łączenie…',
+            M.isHost && p.id !== L.host && L.st === 'lobby' ? h('button', { type: 'button', class: 'small danger', style: 'margin-left:8px', text: 'Usuń', onclick: function () { M.kick(p.id); } }) : null)));
       });
       var left = h('div', { class: 'panel col' }, h('h3', { text: 'Gracze ' + L.players.length + '/' + L.cfg.max }), h('div', { class: 'tblwrap' }, tbl));
       // ustawienia wyścigu

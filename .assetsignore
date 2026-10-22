@@ -12,3 +12,5 @@ start.bat
 *.bdl
 *.bank
 *.zip
+worker
+supabase

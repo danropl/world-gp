@@ -1,10 +1,18 @@
 // Cloudflare Workers: gra to statyczne pliki (bez budowania), serwowane z katalogu głównego repozytorium.
+// Worker (worker/index.js) obsługuje tylko /api/* — dane serwera TURN dla multiplayer; resztę serwują pliki statyczne.
+// Sekrety: npx wrangler secret put TURN_KEY_ID  oraz  npx wrangler secret put TURN_KEY_API_TOKEN
 {
   "name": "world-gp",
   "compatibility_date": "2025-09-01",
+  "main": "worker/index.js",
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
+  "ratelimits": [
+    { "name": "TURN_LIMIT", "namespace_id": "4801", "simple": { "limit": 10, "period": 60 } }
+  ],
   // wymagane przez podglądy PR w Workers Builds (npx wrangler preview)
   "previews": {}
 }
