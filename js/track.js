@@ -267,37 +267,37 @@
     return L;
   }
 
-  // Profil prędkości dla parametrów bolidu (p = {power, cd, gripMul, aeroMul, brakeMul}).
-  // Hamowanie i napęd dzielą przyczepność ze skrętem tak jak w PG.stepCar (koło tarcia PHYS.comb).
+  // Profil prędkości dla parametrów bolidu (p = {power, cd, gripMul, aeroMul, brakeMul, setup}) z obwiedni osiągów
+  // modelu bolidu (PG.Veh.envelope): w zakręcie granica przyczepności bocznej, hamowanie i napęd dzielą z nią
+  // elipsę przyczepności opon (combined slip).
   PG.speedProfile = function (T, p) {
-    var N = T.N, L = T.line, v = new Float64Array(N);
-    var P = PG.PHYS, vmax = 110;
-    var gm = p.gripMul, am = p.aeroMul || 1, bm = p.brakeMul || 1;
-    var A0 = P.latA0 * gm, B = P.latB * gm * am;
-    var cr = P.comb || 1.2, R2 = cr * cr;
+    var N = T.N, L = T.line, v = new Float64Array(N), vmax = 110;
+    var E = PG.Veh.envelope(p), at = PG.Veh.envAt, bm = Math.min(1, p.brakeMul || 1);
     // ułamek przyczepności wzdłużnej, który zostaje przy krzywiźnie k i prędkości s
     function lonAvail(k, s) {
-      var s2 = s * s, cap = A0 + B * s2;
-      var u = cap > 0 ? k * s2 / cap : 1;
+      var cap = at(E.lat, s), u = cap > 0 ? k * s * s / cap : 1;
       if (u > 1) u = 1;
-      var r = R2 - u * u;
-      return r >= 1 ? 1 : r <= 0 ? 0 : Math.sqrt(r);
+      return Math.sqrt(1 - u * u);
     }
-    for (var i = 0; i < N; i++) {
-      var k = Math.abs(L.k[i]);
-      v[i] = k <= B ? vmax : Math.min(vmax, Math.sqrt(A0 / (k - B)));
+    // prędkość graniczna w zakręcie: ay_max(v) = k·v² (docisk rośnie z prędkością)
+    function corner(k) {
+      if (k < 1e-5 || at(E.lat, vmax) >= k * vmax * vmax) return vmax;
+      var lo = 0, hi = vmax;
+      for (var it = 0; it < 28; it++) { var m = (lo + hi) / 2; if (at(E.lat, m) >= k * m * m) lo = m; else hi = m; }
+      return lo;
     }
+    for (var i = 0; i < N; i++) v[i] = corner(Math.abs(L.k[i]));
     for (var pass = 0; pass < 2; pass++) {
       for (var j = 2 * N - 1; j >= 0; j--) {
         var a = j % N, b = (j + 1) % N;
         var vb = v[b];
-        var dec = (P.brkA0 + P.brkB * am * vb * vb) * gm * bm * lonAvail(Math.abs(L.k[b]), vb) + p.cd * vb * vb;
+        var dec = at(E.brk, vb) * bm * lonAvail(Math.abs(L.k[b]), vb) + at(E.drag, vb);
         var lim = Math.sqrt(vb * vb + 2 * dec * L.ds[a]);
         if (v[a] > lim) v[a] = lim;
       }
       for (var j2 = 0; j2 < 2 * N; j2++) {
         var a2 = j2 % N, b2 = (j2 + 1) % N, va = Math.max(v[a2], 1);
-        var acc = Math.min((P.tracA0 + P.tracB * am * va * va) * gm * lonAvail(Math.abs(L.k[a2]), va), p.power / va) - p.cd * va * va;
+        var acc = Math.min(at(E.trac, va) * lonAvail(Math.abs(L.k[a2]), va), at(E.eng, va)) - at(E.drag, va);
         var lim2 = Math.sqrt(Math.max(0, va * va + 2 * acc * L.ds[a2]));
         if (v[b2] > lim2) v[b2] = lim2;
       }

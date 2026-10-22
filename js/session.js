@@ -5,7 +5,11 @@
   var DIFF = { easy: 0.865, normal: 0.925, hard: 0.972 };
   PG.DIFF_NAMES = { easy: 'Łatwy', normal: 'Normalny', hard: 'Trudny' };
   var MK = 50; // znaczniki czasu co 50 m (do różnic czasowych)
-  var DEF_ASSISTS = { abs: false, tc: true, autoDrs: true, manual: false };
+  // tc: 0 wyłączona, 1–3 poziom; steer: asysta kierownicy 'auto' (pad, klawiatura, dotyk) | 'on' | 'off';
+  // cs: asysta kontry; stab: kontrola stabilności
+  var DEF_ASSISTS = { abs: false, tc: 2, autoDrs: true, manual: false, steer: 'auto', cs: false, stab: false };
+  function tcLevel(v) { return v === true ? 2 : v === false ? 0 : (v === 1 || v === 2 || v === 3) ? v : (v === 0 ? 0 : 2); }
+  PG.tcLevel = tcLevel;
   var PARTS = ['fwL', 'fwR', 'rw', 'floor', 'suspFL', 'suspFR', 'suspRL', 'suspRR', 'engine'];
   PG.DMG_PARTS = PARTS;
 
@@ -13,7 +17,8 @@
   function num(x) { return typeof x === 'number' && isFinite(x); }
 
   // entries: [{driver, team, isPlayer, compound}]
-  // o.damage: 'off' | 'visual' | 'full'; o.assists: {abs, tc, autoDrs, manual} (tylko dla gracza; manual — ręczna skrzynia)
+  // o.damage: 'off' | 'visual' | 'full'; o.assists: {abs, tc, autoDrs, manual, steer, cs, stab} (tylko dla gracza; manual — ręczna skrzynia)
+  // entries[].setup: setup bolidu (gracz); AI jeździ na domyślnym
   PG.createSession = function (o) {
     var T = o.track;
     var env = { wet: o.weather === 'rain', weatherGrip: PG.WEATHER[o.weather || 'sun'].grip, weather: o.weather || 'sun', wearMul: o.wearMul || 1 };
@@ -25,12 +30,14 @@
     };
     S.damage = (o.damage === 'off' || o.damage === 'visual') ? o.damage : 'full';
     var as = o.assists || DEF_ASSISTS;
-    S.assists = { abs: !!as.abs, tc: as.tc !== false, autoDrs: as.autoDrs !== false, manual: !!as.manual };
+    S.assists = { abs: !!as.abs, tc: tcLevel(as.tc), autoDrs: as.autoDrs !== false, manual: !!as.manual, steer: as.steer === 'on' || as.steer === 'off' ? as.steer : 'auto', cs: !!as.cs, stab: !!as.stab };
     env.dmgFull = S.damage === 'full';
     var skillBase = DIFF[S.difficulty] || DIFF.normal;
     o.entries.forEach(function (e, k) {
       var params = PG.carParams(e.team, e.driver);
-      var car = PG.makeCar({ id: k, driver: e.driver, team: e.team, isPlayer: e.isPlayer, params: params, compound: e.compound || (env.wet ? 'W' : 'M') });
+      var car = PG.makeCar({ id: k, driver: e.driver, team: e.team, isPlayer: e.isPlayer, params: params, compound: e.compound || (env.wet ? 'W' : 'M'), setup: e.setup ? PG.Veh.cleanSetup(e.setup) : null });
+      // opony z koców grzewczych (80 °C) na starcie wyścigu; w kwalifikacjach i pokazie już rozgrzane
+      car.tyreT0 = (o.mode || 'race') === 'race' ? null : 'opt';
       car.compounds = {}; car.compounds[car.compound] = true; car.wearAtLap = 0;
       // multiplayer: bolid innego gracza (stan z sieci) i właściciel miejsca
       if (e.remote) car.remote = true;
@@ -68,7 +75,7 @@
     var ref = PG.tyreGrip(car, env);
     var p = car.params;
     car.ai = { pace: 1, refGrip: ref, side: 0, attack: false, skill: skill };
-    car.profile = PG.speedProfile(T, { power: p.power, cd: p.cd, gripMul: p.gripMul * ref * skill, aeroMul: p.aeroMul, brakeMul: 0.97 });
+    car.profile = PG.speedProfile(T, { power: p.power, cd: p.cd, gripMul: p.gripMul * ref * skill, aeroMul: p.aeroMul, brakeMul: 0.97, setup: car.setup });
   }
   PG.setupAI = setupAI;
 
@@ -78,7 +85,7 @@
     var d = PG.dmgPerf(c, true), p = c.params;
     var aero = Math.min(d.aF, d.aR), gD = d.gD, pw = d.pw, drag = d.drag;
     c.profKey = aero + gD + pw;
-    c.profile = PG.speedProfile(T, { power: p.power * pw, cd: p.cd * drag, gripMul: p.gripMul * c.ai.refGrip * c.ai.skill * gD, aeroMul: p.aeroMul * aero, brakeMul: 0.97 });
+    c.profile = PG.speedProfile(T, { power: p.power * pw, cd: p.cd * drag, gripMul: p.gripMul * c.ai.refGrip * c.ai.skill * gD, aeroMul: p.aeroMul * aero, brakeMul: 0.97, setup: c.setup });
   }
 
   // Czas okrążenia AI w kwalifikacjach (symulacja)
@@ -116,7 +123,13 @@
     if (running) S.time += dt;
     // dyrekcja wyścigu (na hoście) i limity prędkości pod SC/VSC
     if (PG.RC && S.rc) { if (!S.netClient) PG.RC.update(S, dt); PG.RC.caps(S); }
-    var sub = 4, h = dt / sub;
+    // stały krok fizyki (PG.Veh.H = 2 ms) niezależny od liczby klatek na sekundę
+    var h = PG.Veh.H;
+    S.acc = (S.acc || 0) + dt;
+    var sub = Math.floor(S.acc / h + 1e-9);
+    if (sub > 60) sub = 60;
+    S.acc -= sub * h;
+    if (S.acc > h) S.acc = 0;
     for (var st = 0; st < sub; st++) {
       for (var i = 0; i < cars.length; i++) {
         var c = cars[i];
@@ -124,10 +137,14 @@
         if (c.retired) { c.v = 0; c.throttle = 0; c.brake = 1; c.drsOpen = false; continue; }
         if (c.pit && PG.Pit) { c.manual = false; PG.Pit.step(c, h, S); continue; } // przejazd aleją serwisową (biegi zmienia ogranicznik)
         var aiDrive = !!c.ai && (!c.isPlayer || c.finished || S.autoPlayer);
-        // pomoce: AI zawsze z ABS/TC, gracz wg ustawień
+        // pomoce: AI zawsze z ABS/TC i kontrolą stabilności, gracz wg ustawień
         c.human = !aiDrive && !!c.isPlayer;
         c.absOn = !c.human || !!A.abs;
-        c.tcOn = !c.human || A.tc !== false;
+        var tl = c.human ? tcLevel(A.tc) : 2;
+        c.tcOn = tl > 0; c.tcLvl = tl || 2;
+        c.stabOn = !c.human || !!A.stab;
+        c.sAssist = A.steer === 'on' || (A.steer !== 'off' && !c.inWheel);
+        c.csAssist = !!A.cs;
         // ręczna skrzynia tylko dla gracza; po włączeniu (także po alei serwisowej) startuje z biegu automatu
         var man = c.human && !!A.manual;
         if (man && !c.manual) { c.mgear = Math.max(1, c.gear || 1); c.shiftT = 0; }
@@ -135,8 +152,12 @@
         if (c.retiring && PG.RC) {
           PG.RC.retireControl(c, T, h); c.wantRev = false;
         } else if (aiDrive) {
-          PG.aiControl(c, T, cars, S.env, h);
-          if (c.finished) { c.throttle *= 0.4; if (c.v > 40) c.brake = 0.2; }
+          // decyzje AI co 8 ms (fizyka co 2 ms; skręt reguluje vehicle.js w każdym kroku)
+          c.aiT = (c.aiT || 0) + h;
+          if (c.aiT > 0.0079 || !(c.steer === c.steer)) {
+            PG.aiControl(c, T, cars, S.env, c.aiT); c.aiT = 0;
+            if (c.finished) { c.throttle *= 0.4; if (c.v > 40) { c.throttle = 0; c.brake = Math.max(c.brake, 0.2); } }
+          }
           c.wantRev = false;
         } else if (c.isPlayer) {
           applyInput(c, input, h, S, A);
@@ -199,6 +220,7 @@
     var ax = num(inp.steerAxis) ? clamp(inp.steerAxis, -1, 1) : 0;
     if (digi !== 0) c.padSteer = false;
     else if (Math.abs(ax) > 0.08 || (inp.analog && ax !== 0)) c.padSteer = true;
+    c.inWheel = !!inp.wheel;
     if (c.padSteer && digi === 0 && num(inp.steerAxis)) c.steerIn = ax;
     else {
       var target = digi * (1 - 0.14 * hs); // przy dużej prędkości pełny skręt tuż przy granicy przyczepności

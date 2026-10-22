@@ -139,7 +139,12 @@
         vt = toLim > 0 ? Math.min(58, Math.sqrt(lim * lim + 2 * 13 * toLim)) : lim;
         vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 7 * (toBox - 0.2))));
         if (toBox < 0.35 && c.v < 1.2) { pt.ph = 'stop'; pt.t = stopTime(pt) + (pt.free ? FREE_EXTRA + Math.random() * 2 : 0); pt.stopT = pt.t; c.v = 0; S.events.push({ type: 'pitstop', car: c, t: pt.t, comp: pt.comp, free: pt.free }); }
-      } else vt = pt.s < sLimB ? lim : 76;
+      } else {
+        vt = pt.s < sLimB ? lim : 76;
+        // wyjazd: na tor z prędkością, z której da się wyhamować przed najbliższym zakrętem (profil prędkości)
+        var prof = c.profile && c.profile.v, vx = prof ? prof[wrapI(P.exit, N)] : 50;
+        if (pt.s >= sLimB) vt = Math.min(vt, Math.sqrt(vx * vx + 2 * 12 * Math.max(0, (sExit - pt.s) * ds)));
+      }
       if (pt.ph !== 'stop') {
         var v = c.v;
         if (v < vt) { c.v = Math.min(vt, v + Math.max(3, 9 - v * 0.05) * dt); c.throttle = 0.8; c.brake = 0; }
@@ -171,6 +176,7 @@
     // koniec alei: z powrotem na torze
     if (pt.ph === 'out' && s1 >= sExit) {
       c.pit = null; c.inPit = false; c.offset = 0; c.offsetTarget = 0; c.steerIn = 0; c.pitLim = false;
+      c.vsHard = true; // fizyka bolidu przejmuje ruch z prędkością z alei
       c.pitCount = (c.pitCount || 0) + 1;
       S.events.push({ type: 'pitout', car: c });
     }
@@ -188,6 +194,7 @@
   function service(c, S) {
     var pt = c.pit;
     c.compound = pt.comp; c.wear = 0; c.flat = 0; c.wearAtLap = 0; c.wearLap = 0;
+    if (PG.Veh) PG.Veh.newTyres(c); // nowe opony z koców grzewczych
     c.compounds = c.compounds || {}; c.compounds[pt.comp] = true;
     if (pt.fixFW) { c.dmg.fwL = 0; c.dmg.fwR = 0; }
     if (pt.fixRW) c.dmg.rw = 0;

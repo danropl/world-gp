@@ -1,17 +1,14 @@
-// WORLD GP — model jazdy, uszkodzenia i sztuczna inteligencja kierowców.
+// WORLD GP — krok bolidu na torze (nawierzchnie, bariery, uszkodzenia) i sztuczna inteligencja kierowców.
+// Dynamika bolidu (opony, zawieszenie, napęd) jest w vehicle.js.
 (function (PG) {
   'use strict';
 
+  // Skala cech zespołu (PG.carParams) i kolizje. Dynamika: PG.VEH w vehicle.js.
   PG.PHYS = {
-    latA0: 23, latB: 0.0042,   // przyczepność boczna: a = (A0 + B·v²)·grip
-    brkA0: 10, brkB: 0.0045,   // hamowanie
-    tracA0: 12, tracB: 0.002,  // trakcja
-    cd: 0.00104,               // opór powietrza na kg
-    power: 940,                // moc na kg (W/kg)
+    cd: 0.00104,               // opór powietrza na kg (odniesienie dla cechy aero zespołu)
+    power: 940,                // moc na kg (odniesienie dla cechy mocy zespołu)
     carLen: 1.45, carR: 1.05,  // dwa koła kolizyjne ±carLen, promień carR
-    comb: 1.2,                 // koło tarcia: √(boczne² + wzdłużne²) ≤ comb, każde z osobna ≤ 1
-    lockLoss: 0.18,            // zablokowane koła hamują ok. 82% maksimum
-    dirty: 0.22                // maks. utrata docisku za innym bolidem (brudne powietrze)
+    dirtyF: 0.26, dirtyR: 0.14 // maks. utrata docisku przodu / tyłu za innym bolidem (brudne powietrze)
   };
 
   var GEAR_TOP = [0, 82, 118, 154, 190, 228, 266, 306, 360]; // km/h
@@ -24,13 +21,6 @@
   var UP_AT = 0.97, DOWN_AT = 0.86;
 
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
-
-  // Ułamek przyczepności dostępny w jednym kierunku, gdy drugi zużywa ułamek u
-  function combGrip(u) {
-    var c = PG.PHYS.comb, r = c * c - u * u;
-    return r >= 1 ? 1 : r <= 0 ? 0 : Math.sqrt(r);
-  }
-  PG.combGrip = combGrip;
 
   // Parametry fizyczne z cech zespołu i kierowcy
   PG.carParams = function (team, driver) {
@@ -70,25 +60,50 @@
       axS: 0, dirty: 0, maxCurv: 0, wallNx: 0, wallNy: 0,
       human: false, absOn: true, tcOn: true, analogIn: false,
       thrIn: 0, brkIn: 0, wantRev: false, revT: 0, padSteer: false,
-      drsWas: false, lockEv: false, aiBrk: false, aiLockT: 0, aiLockA: 0, aiLockS: 0,
-      profKey: 3, profDirty: false, profAt: -9
+      drsWas: false, lockEv: false, aiT: 0,
+      profKey: 3, profDirty: false, profAt: -9,
+      // pola dopisywane później przez sesję, aleję serwisową i dyrekcję wyścigu — zadeklarowane od razu,
+      // żeby wszystkie bolidy miały ten sam kształt obiektu (szybki dostęp w krokach fizyki)
+      absAct: 0, tcAct: 0, vpKey: undefined, vsHard: false, brakeT: undefined, tyreTs: undefined, tyreTc: undefined, tyreW: undefined,
+      aiPit: undefined, bestSectors: undefined, compounds: undefined, ei: undefined, fLap: undefined, finishLaps: undefined,
+      inPit: undefined, lastDetect: undefined, noBest: undefined, owner: undefined, pit: undefined, pitComp: undefined,
+      pitCount: undefined, pitLim: undefined, pitReq: undefined, rcCap: undefined, remote: undefined, retLat: undefined,
+      retireT: undefined, retireWhy: undefined, retiring: undefined, ruleFined: undefined, started: undefined,
+      timeAt: undefined, wearAtLap: undefined, wearLap: undefined,
+      // model bolidu (vehicle.js): stan dynamiki, setup, pomoce gracza
+      vs: null, vp: null, envC: null, setup: o.setup || null, setupKey: JSON.stringify(o.setup || null),
+      delta: 0, gripT: 1, yawRate: 0, rollA: 0, pitchA: 0, tyreT0: null,
+      tcLvl: 2, sAssist: true, csAssist: false, stabOn: false, inWheel: false
     };
+  };
+  // Nowy setup bolidu (od razu w trakcie sesji)
+  PG.setCarSetup = function (car, setup) {
+    car.setup = setup ? PG.Veh.cleanSetup(setup) : null;
+    car.setupKey = JSON.stringify(car.setup);
+    car.vp = null; car.envC = null;
   };
 
   PG.placeOnGrid = function (car, T, slot) {
     car.x = slot.x; car.y = slot.y; car.h = slot.h; car.v = 0; car.idx = slot.i; car.lastIdx = slot.i;
     car.lap = 0; car.dist = -(T.N - slot.i) * T.ds; // ujemny dystans przed linią startu
     car.beta = 0; car.axS = 0; car.mgear = 1; car.shiftT = 0;
+    if (PG.Veh) PG.Veh.resetMotion(car);
   };
 
-  function tyreGrip(car, env) {
+  // Przyczepność opon względem nowych pośrednich na suchym (mieszanka, pogoda) — bez zużycia i temperatury
+  function baseGrip(car, env) {
     var t = PG.TYRES[car.compound] || PG.TYRES.M;
     var wet = !!(env && env.wet);
     var g;
     if (wet) g = car.compound === 'W' ? 0.86 : 0.66;
     else g = car.compound === 'W' ? 0.86 : t.grip;
-    g *= 1 - 0.2 * Math.pow(clamp(car.wear || 0, 0, 1), 1.6);
     return g * ((env && env.weatherGrip) || 1);
+  }
+  PG.baseGrip = baseGrip;
+  // Jak wyżej, ze zużyciem (średnia czterech opon)
+  function tyreGrip(car, env) {
+    var w = clamp(car.wear || 0, 0, 1);
+    return baseGrip(car, env) * (1 - 0.06 * w - 0.12 * w * w * w * w);
   }
   PG.tyreGrip = tyreGrip;
 
@@ -111,37 +126,25 @@
   }
   PG.dmgPerf = dmgPerf;
 
-  // Maksymalne opóźnienie hamowania (m/s², dodatnie) na asfalcie przy prędkości v
+  // Maksymalne opóźnienie hamowania (m/s², dodatnie) na asfalcie przy prędkości v (podpowiedź hamowania na linii jazdy)
   PG.brakeDecel = function (car, v, env) {
-    var P = PG.PHYS, p = car && car.params;
-    if (!p) return 30;
-    var av = Math.abs(v) || 0;
+    var p = car && car.params;
+    if (!p || !PG.Veh) return 30;
+    var E = car.envC || (car.envC = PG.Veh.envelope({ power: p.power, cd: p.cd, gripMul: p.gripMul, aeroMul: p.aeroMul, brakeMul: p.brakeMul, setup: car.setup }));
     var dp = dmgPerf(car, !!(env && env.dmgFull));
-    var g = p.gripMul * tyreGrip(car, env) * dp.gD;
-    var dec = (P.brkA0 + P.brkB * p.aeroMul * av * av * 0.5 * (dp.aF + dp.aR)) * g * (p.brakeMul || 1) + p.cd * dp.drag * av * av;
+    var g = tyreGrip(car, env) * dp.gD * (car.gripT || 1);
+    var dec = PG.Veh.envAt(E.brk, v) * g * (0.5 + 0.25 * (dp.aF + dp.aR)) + PG.Veh.envAt(E.drag, v) * dp.drag;
     return (isFinite(dec) && dec > 1) ? dec : 1;
   };
-
-  // Ręczna skrzynia: ułamek mocy silnika na wybranym biegu.
-  // Pełna moc od 8000 obr./min; niżej silnik słabnie (za wysoki bieg). Ogranicznik obrotów odcina napęd
-  // na końcu biegu, a krótka przerwa przy zmianie w górę też. Jedynka: sprzęgło pozwala ruszyć pełną mocą.
-  function gearPower(car, av) {
-    var g = car.mgear || 1, kmh = av * 3.6, top = GEAR_TOP[g];
-    if (car.shiftT > 0) return 0;
-    if (kmh >= top * 0.995) return 0;
-    if (g === 1) return 1;
-    var r = kmh / top; // obroty jako ułamek obrotów końca biegu: pełna moc od 64 % (ok. 12 000 obr./min)
-    return r >= 0.64 ? 1 : clamp(0.25 + 0.75 * (r - 0.24) / 0.4, 0.25, 1);
-  }
 
   // Zmiana biegu (ręczna skrzynia). dir: +1 w górę, −1 w dół.
   // Zwraca 'up' / 'down', 'deny' (redukcja zakręciłaby silnik ponad ogranicznik) albo null (brak biegu).
   PG.shiftGear = function (car, dir) {
     if (!car || !car.manual) return null;
-    var g = car.mgear || 1, kmh = Math.abs(car.v) * 3.6;
+    var g = car.mgear || 1, kmh = Math.abs(car.v) * 3.6 / ((car.vp && car.vp.gs) || 1);
     if (dir > 0) {
       if (g >= GEAR_TOP.length - 1) return null;
-      car.mgear = g + 1; car.shiftT = 0.015;
+      car.mgear = g + 1; car.shiftT = 0.03; // przerwa w napędzie przy zmianie w górę
       return 'up';
     }
     if (g <= 1) return null;
@@ -163,21 +166,21 @@
     return Math.min(RPM.top + 300, Math.max(RPM.idle, r));
   };
 
-  // Krok fizyki dla jednego bolidu
+  // Krok fizyki dla jednego bolidu: położenie na torze, nawierzchnia, dynamika (vehicle.js), bariery
+  var STEP = { surfGrip: 1, surfDrag: 0, kerb: false, offRoad: false, dp: null, dirtyF: 0, dirtyR: 0, human: false };
   PG.stepCar = function (car, dt, T, env) {
-    var P = PG.PHYS, p = car.params;
+    var P = PG.PHYS;
     env = env || {};
     if (!(dt > 0)) return;
     // zabezpieczenie przed wartościami nieskończonymi
     if (!(isFinite(car.x) && isFinite(car.y) && isFinite(car.h))) {
       var i0 = (car.idx >= 0 && car.idx < T.N) ? car.idx : 0;
       car.x = T.line.x[i0]; car.y = T.line.y[i0]; car.h = Math.atan2(T.ty[i0], T.tx[i0]); car.v = 0; car.idx = i0;
+      car.vsHard = true;
     }
-    if (!isFinite(car.v)) car.v = 0;
-    if (!isFinite(car.beta)) car.beta = 0;
-    if (!isFinite(car.axS)) car.axS = 0;
-    if (!(car.lock >= 0 && car.lock <= 1)) car.lock = 0;
-    if (!(car.wspin >= 0 && car.wspin <= 1)) car.wspin = 0;
+    if (!isFinite(car.v)) { car.v = 0; car.vsHard = true; }
+    if (!isFinite(car.beta)) { car.beta = 0; car.vsHard = true; }
+    if (car.vs && !(isFinite(car.vs.vx) && isFinite(car.vs.vy) && isFinite(car.vs.r))) car.vs = null;
     if (!(car.flat >= 0)) car.flat = 0;
     if (!car.dmg) car.dmg = zeroDmg();
 
@@ -190,6 +193,7 @@
     car.lat = lat;
     var alat = Math.abs(lat), hw = T.hw, right = lat > 0;
     var bar = right ? T.barR[idx] : T.barL[idx];
+    var av0 = Math.abs(car.v);
     var surfGrip = 1, surfDrag = 0, surface = 'asphalt';
     if (alat <= hw) { surface = 'asphalt'; }
     else if (alat <= hw + 1.6 && (right ? T.kerbR[idx] : T.kerbL[idx])) { surface = 'kerb'; surfGrip = 0.94; }
@@ -197,185 +201,21 @@
       var st = right ? T.surfR[idx] : T.surfL[idx];
       if (st === 3) st = (lat >= T.pitA[idx] - 0.3 && lat <= T.pitB[idx] + 0.3) ? 4 : 0; // droga alei albo trawiasty klin
       if (st === 4) { surface = 'asphalt'; }
-      else if (st === 1) { surface = 'gravel'; surfGrip = 0.38; surfDrag = (5 + 0.03 * car.v * car.v) * Math.min(1, Math.abs(car.v) / 8); }
+      else if (st === 1) { surface = 'gravel'; surfGrip = 0.38; surfDrag = (5 + 0.03 * av0 * av0) * Math.min(1, av0 / 8); }
       else if (st === 2) { surface = 'runoff'; surfGrip = 0.88; surfDrag = 0.4; }
-      else { surface = 'grass'; surfGrip = 0.5; surfDrag = (2 + 0.012 * car.v * car.v) * Math.min(1, Math.abs(car.v) / 8); }
+      else { surface = 'grass'; surfGrip = 0.5; surfDrag = (2 + 0.012 * av0 * av0) * Math.min(1, av0 / 8); }
     }
     car.surface = surface;
     var kerb = surface === 'kerb', offRoad = surface === 'grass' || surface === 'gravel';
-    var human = !!car.human;
 
-    // docisk: uszkodzenia i brudne powietrze
-    var dp = dmgPerf(car, !!env.dmgFull);
-    var dk = 1 - P.dirty * clamp(car.dirty || 0, 0, 1);
-    var aF = dp.aF * dk, aR = dp.aR * dk;
-    var flat = car.flat;
-    var grip = p.gripMul * surfGrip * tyreGrip(car, env) * dp.gD * (1 - 0.03 * flat);
-    var v0 = car.v, v = v0, av = Math.abs(v), v2 = v * v;
-    var aero = P.latB * p.aeroMul * v2;
-    var latN = (P.latA0 + aero * 0.5 * (dp.aF + dp.aR)) * grip; // nominalna przyczepność boczna (skala kierownicy)
-    // przeniesienie obciążenia: hamowanie dociąża przód, gaz dociąża tył
-    var dF = clamp(-car.axS * 0.003, -0.06, 0.1);
-    var kF = 1 + dF, kR = 1 - dF;
-    if (!human) { if (kF < 1) kF = 1; if (kR < 1) kR = 1; } // AI: pomoc stabilności
-    var latF = (P.latA0 + aero * aF) * grip * kF;
-    var latR = (P.latA0 + aero * aR) * grip * kR;
-    var vs = av > 3 ? av : 3, vs2 = vs * vs;
-    var maxCurv = Math.min(1 / 6.5, latN / vs2 * 1.14);
-    car.maxCurv = maxCurv;
-    var want = clamp(car.steer || 0, -1, 1) * maxCurv;
-    if (dp.pull !== 0 && av > 3) want += dp.pull * 0.07 * maxCurv;
-    // kontra w poślizgu (skręt w stronę znoszenia): koła wzdłuż ruchu nie wyrzucają toru na zewnątrz
-    if (human && want * car.beta > 0) {
-      var cs = Math.min(Math.abs(want), Math.abs(car.beta) * 2.5 * maxCurv);
-      want -= want > 0 ? cs : -cs;
-    }
-    var sgnW = want > 0 ? 1 : want < 0 ? -1 : 0;
-    // żądane wykorzystanie przyczepności bocznej na osiach
-    var aReq = Math.abs(want) * v2;
-    if (aReq > latF) aReq = latF;
-    var ulF = latF > 0.01 ? aReq / latF : 0;
-    var ulR = latR > 0.01 ? Math.min(1, aReq / latR) : 0;
-    var ulMax = ulF > ulR ? ulF : ulR;
-
-    // siły wzdłużne
-    var cd = p.cd * dp.drag * (car.drsOpen ? 0.86 : 1) * (car.slip || 1);
-    var acc = 0, uxF = 0, uxR = 0, lockT = 0, spinT = 0, reversing = false;
-    var thr = clamp(car.throttle || 0, 0, 1), brk = clamp(car.brake || 0, 0, 1);
-    car.absAct = 0; car.tcAct = 0; // praca ABS i kontroli trakcji (0..1) — dla adaptacyjnych spustów pada
-    if (thr > 0) {
-      var tracCap = (P.tracA0 + P.tracB * p.aeroMul * v2 * aR) * grip * (car.launchBoost || 1);
-      var tracAv = tracCap * combGrip(ulR); // trakcja pozostała przy obecnym skręcie
-      var eng = p.power * dp.pw / Math.max(av, 4);
-      if (car.manual && human) eng *= gearPower(car, av);
-      var drive;
-      if (car.tcOn) {
-        // kontrola trakcji: gaz to ułamek dostępnej trakcji
-        drive = (eng < tracAv ? eng : tracAv) * thr;
-        if (eng * thr > tracAv * 1.25 && av < 30) spinT = 0.12;
-        if (eng * thr > tracAv) car.tcAct = clamp((eng * thr / Math.max(tracAv, 0.01) - 1) / 0.6, 0, 1);
-      } else {
-        var dem = eng * thr;
-        spinT = tracAv > 0.01 ? clamp((dem / tracAv - 1) / 1.5, 0, 1) : (dem > 0.01 ? 1 : 0);
-        drive = (dem < tracAv ? dem : tracAv) * (1 - 0.18 * car.wspin);
-      }
-      acc += drive;
-      if (tracCap > 0.01) uxR = Math.min(1, drive / tracCap);
-    }
-    if (brk > 0) {
-      if (v > 0.5) {
-        // hamowanie bez brudnego powietrza (jak w profilu prędkości AI i PG.brakeDecel)
-        var brkCap = (P.brkA0 + P.brkB * p.aeroMul * v2 * 0.5 * (dp.aF + dp.aR)) * grip * (p.brakeMul || 1);
-        // przy małej prędkości docisk znika, a ciśnienie w układzie zostaje → łatwiej o blokadę
-        var req = brk * (1 + 0.08 * clamp((30 - av) / 20, 0, 1) + (env.wet ? 0.04 : 0));
-        var ux;
-        if (car.absOn) {
-          var ulB = ulF;
-          if (!human) {
-            // AI: jak w profilu prędkości — liczy się krzywizna linii, nie wcześniejsze wejście w zakręt
-            var kl = Math.abs(T.line.k[idx]) || 0;
-            var ulL = latF > 0.01 ? Math.min(1, kl * v2 / latF) : 0;
-            ulB = ulMax < ulL ? ulMax : ulL;
-          }
-          var gB = combGrip(ulB);
-          ux = Math.min(req, gB);
-          if (av > 4 && req > gB) car.absAct = clamp((req - gB) / 0.25, 0, 1);
-        } else {
-          var lx = combGrip(ulF) * (kerb ? 0.9 : 1) * (1 - 0.08 * flat);
-          if (av > 4 && req > lx) lockT = clamp((req - lx) / 0.3, 0, 1);
-          // hamulec z klawiatury/dotyku (bez dozowania): blokada widoczna, ale łagodniejsza
-          if (human && !car.analogIn && lockT > 0.45) lockT = 0.45;
-          ux = Math.min(req, 1) * (1 - P.lockLoss * car.lock);
-        }
-        acc -= brkCap * ux;
-        uxF = ux;
-        var uxB = ux * 0.85; // balans hamulców do przodu: tył mniej obciążony hamowaniem
-        if (uxB > uxR) uxR = uxB;
-      } else if (car.isPlayer && car.wantRev && car.revT > 0.4 && thr === 0 && !car.hold) { acc -= 5 * brk; reversing = true; } // bieg wsteczny
-      else if (v > 0) acc -= 20 * brk;
-    }
-    acc -= cd * v * av + (v > 0 ? 0.2 : v < 0 ? -0.2 : 0);
-    // ręczna skrzynia: hamowanie silnikiem rośnie z obrotami (niski bieg = mocniej)
-    if (car.manual && human && thr === 0 && v > 5) acc -= 1.6 * clamp((av * 3.6 / GEAR_TOP[car.mgear || 1] - 0.32) / 0.68, 0, 1);
+    // dynamika bolidu
+    var dk = clamp(car.dirty || 0, 0, 1);
+    STEP.surfGrip = surfGrip; STEP.surfDrag = surfDrag; STEP.kerb = kerb; STEP.offRoad = offRoad;
+    STEP.dp = dmgPerf(car, !!env.dmgFull); STEP.dirtyF = P.dirtyF * dk; STEP.dirtyR = P.dirtyR * dk; STEP.human = !!car.human;
+    PG.Veh.step(car, dt, env, STEP);
     if (car.shiftT > 0) car.shiftT -= dt;
-    acc -= surfDrag * (v > 0 ? 1 : v < 0 ? -1 : 0);
-
-    // siły boczne: przód wyznacza tor jazdy (podsterowność), tył może się uślizgnąć (nadsterowność)
-    var lockP = car.absOn ? 0 : car.lock;   // u AI i z ABS blokada nie wpływa na jazdę
-    var spinP = car.tcOn ? 0 : car.wspin;
-    var cFn = combGrip(uxF > 1 ? 1 : uxF) * latF / vs2;
-    var cF = cFn * (1 - 0.85 * lockP);      // zablokowane przednie koła prawie nie skręcają
-    var curvF = want > cF ? cF : want < -cF ? -cF : want;
-    var over = cFn > 1e-6 ? Math.abs(want) / cFn - 1 : 0;
-    var skid = 0;
-    if (over > 0 && av > 8) { var o2 = over < 0.6 ? over : 0.6; acc -= o2 * 14 * (v > 0 ? 1 : -1); skid = Math.min(1, o2 * 4); }
-    var aLat = Math.abs(curvF) * v2;
-    var b0 = car.beta, bAbs = b0 < 0 ? -b0 : b0;
-    var rearCap = combGrip(uxR > 1 ? 1 : uxR) * latR * (1 - 0.35 * spinP) * (1 - 0.05 * Math.min(1, bAbs / 0.2));
-    var exR = aLat - rearCap, curvPath = curvF;
-    if (exR > 0 && aLat > 0.01) curvPath = curvF * (0.5 + 0.5 * rearCap / aLat);
-    var sgnC = curvF > 0 ? 1 : curvF < 0 ? -1 : 0;
-    var betaT = 0;
-    if (exR > 0 && v > 4) betaT = -sgnC * Math.min(human ? 0.42 : 0.06, (human ? 1.0 : 0.3) * exR / (latN > 1 ? latN : 1));
-    if (v < 12) betaT *= (v > 0 ? v : 0) / 12;
-    // kąt znoszenia dąży do celu z tłumieniem; kontra przyspiesza wyjście z poślizgu
-    var bTA = betaT < 0 ? -betaT : betaT;
-    var grow = bTA > bAbs;
-    var rate = grow ? 5.5 : 3.0;
-    if (!grow && (car.steer || 0) * b0 > 0) rate *= 1.8; // kierownica, bo kontra mogła wyzerować want
-    if (av < 3) rate = 12;
-    var b1 = b0 + (betaT - b0) * Math.min(1, rate * dt);
-    if (av > 10) {
-      if (kerb) b1 += (Math.random() - 0.5) * (human ? 0.012 : 0.003) * Math.min(1, av / 40); // krawężnik niepokoi bolid
-      if (dp.susp > 0.05) b1 += (Math.random() - 0.5) * 0.006 * dp.susp;                 // drgania krzywego zawieszenia
-    }
-    if (v <= 0) b1 = 0;
-    b1 = clamp(b1, -0.6, 0.6);
-    var dB = b1 - b0;
-    car.beta = b1;
-
-    v += acc * dt;
-    if (v < 0 && v0 >= 0 && !reversing) v = 0;
-    if (v > 0 && v0 < 0 && thr === 0) v = 0;
-    if (car.hold && v < 0) v = 0; // na polu startowym nigdy do tyłu
-    if (v < -7) v = -7;
-    car.v = v;
-    // kurs nadwozia = kierunek ruchu − kąt znoszenia
-    car.h += curvPath * v * dt - dB;
-    car.latAcc = curvPath * v * v;
-    if (offRoad) car.h += (Math.random() - 0.5) * 0.02 * Math.min(1, Math.abs(v) / 30);
-    var psi = car.h + car.beta;
-    car.x += Math.cos(psi) * v * dt;
-    car.y += Math.sin(psi) * v * dt;
-
-    // blokada (u AI tylko kosmetyczna, czasem przy mocnym hamowaniu)
-    if (!human) {
-      if (brk > 0.75 && av > 20) {
-        if (!car.aiBrk) {
-          car.aiBrk = true;
-          if (Math.random() < 0.07) { car.aiLockT = 0.2 + Math.random() * 0.4; car.aiLockA = 0.38 + Math.random() * 0.25; car.aiLockS = (Math.random() - 0.5) * 1.2; }
-        }
-      } else if (brk < 0.2) car.aiBrk = false;
-      if (car.aiLockT > 0) {
-        car.aiLockT -= dt;
-        if (av < 8 || brk < 0.3) car.aiLockT = 0; else lockT = car.aiLockA;
-      }
-    }
-    car.lock = clamp(car.lock + (lockT - car.lock) * Math.min(1, (lockT > car.lock ? 14 : 8) * dt), 0, 1);
-    car.wspin = clamp(car.wspin + (spinT - car.wspin) * Math.min(1, (spinT > car.wspin ? 10 : 6) * dt), 0, 1);
-    if (car.lock < 0.01) car.lockSide = 0;
-    else if (human) car.lockSide = clamp(sgnW * ulF * 1.3, -1, 1); // wewnętrzne koło blokuje pierwsze
-    else car.lockSide = clamp(car.aiLockS || 0, -1, 1);
-    if (human && car.lock > 0.2 && av > 4) car.flat = Math.min(1, flat + car.lock * dt * 0.05 * clamp(av / 40, 0.3, 1.5)); // AI: blokada tylko kosmetyczna
-    var axr = (v - v0) / dt;
-    if (isFinite(axr)) car.axS += (clamp(axr, -60, 30) - car.axS) * Math.min(1, dt * 10);
-
-    // poślizg ogólny (dźwięk, ślady, dym)
-    var bs = car.beta < 0 ? -car.beta : car.beta;
-    if (av > 8 && bs > 0.03) skid = Math.max(skid, Math.min(1, bs * 3.5));
-    skid = Math.max(skid, car.lock * 0.9, av > 1 ? car.wspin * 0.75 : 0);
-    if (offRoad) skid = Math.max(skid, Math.min(1, av / 40));
-    car.skid = skid;
+    // trawa i żwir: nierówności szarpią bolidem
+    if (offRoad && car.vs && av0 > 3) car.vs.r += (Math.random() - 0.5) * 30 * dt * Math.min(1, av0 / 30);
 
     // bariery
     car.wall = 0;
@@ -395,31 +235,29 @@
         if (Math.abs(relH) < Math.PI / 2) car.h = th + relH * 0.3;
         else { var back = relH - (relH > 0 ? 1 : -1) * Math.PI; car.h = th + Math.PI + back * 0.3; }
         car.beta = 0;
+        car.vsHard = true; // koła toczą się dalej z nową prędkością, rotacja wygaszona
         car.wall = impact;
         car.wallNx = T.nx[idx] * sgn; car.wallNy = T.ny[idx] * sgn; // kierunek do ściany (do oceny uszkodzeń)
       }
     }
-    // biegi i obroty (dźwięk, HUD)
-    var kmh = Math.abs(car.v) * 3.6, g = car.manual && human ? (car.mgear || 1) : PG.autoGear(car.gear, kmh);
-    car.gear = car.v < -0.5 ? 0 : g;
-    car.limiter = kmh >= GEAR_TOP[g] * 0.995;
-    car.rpm = car.limiter ? RPM.top - 150 + Math.random() * 300 : PG.engineRpm(g, kmh, thr) + car.wspin * 3000;
-    // zużycie opon
-    var usage = Math.min(1.5, Math.abs(car.latAcc || 0) / 35 + (brk > 0 ? 0.3 : 0) + car.skid * 1.5);
-    var tw = PG.TYRES[car.compound] || PG.TYRES.M;
-    car.wear = Math.min(1, car.wear + dt * 0.00026 * (env.wearMul || 1) * tw.wear * p.wearMul * (0.5 + usage) * (env.wet && car.compound !== 'W' ? 0.7 : 1) * (!env.wet && car.compound === 'W' ? 3 : 1));
   };
 
   // Kontroler AI
   PG.aiControl = function (car, T, cars, env, dt) {
     var P = PG.PHYS, L = T.line, N = T.N, v = Math.max(car.v, 0);
-    var look = Math.round((9 + v * 0.32) / T.ds);
+    var look = Math.round((12 + v * 0.36) / T.ds);
     var ai = car.ai;
     // unikanie i wyprzedzanie
-    var wantOff = 0, cap = Infinity;
+    var wantOff = 0, cap = Infinity, close = false;
     for (var i = 0; i < cars.length; i++) {
       var o = cars[i]; if (o === car || o.retired) continue;
+      if (car.ghost > 0 || o.ghost > 0) continue; // po powrocie na tor bolidy przenikają się — nie blokuj się nawzajem
       var dd = o.dist - car.dist;
+      // bardzo wolny bolid przed nami (obrót, uszkodzenie): hamuj na czas, z zasięgiem drogi hamowania
+      if (dd > 0 && dd < 12 + v * v / 40 && o.v < Math.min(v * 0.6, 20) && Math.abs(o.lat - car.lat) < 3.2) {
+        var ov = Math.max(0, o.v);
+        cap = Math.min(cap, Math.sqrt(ov * ov + 2 * 20 * Math.max(0, dd - 8)));
+      }
       if (dd > 0 && dd < 34) {
         var ld = Math.abs(o.lat - car.lat);
         if (ld < 4.4) {
@@ -431,12 +269,20 @@
             wantOff = (o.lat + side * 5.0) - (L.o[car.idx] || 0);
           }
         }
-        if (dd < 11 && ld < 3.4) cap = Math.min(cap, o.v * (dd < 7 ? 0.9 : 0.985));
+        // za stojącym/wolnym bolidem nie zatrzymuj się do zera, jeśli i tak go objeżdżasz
+        if (dd < 11 && ld < 3.4) cap = Math.min(cap, Math.max(o.v * (dd < 7 ? 0.9 : 0.985), wantOff !== 0 && o.v < 8 ? 6 : 0));
+        // rywal przed nami hamuje: zostaw sobie drogę hamowania (bezpieczny odstęp)
+        if (dd < 34 && ld < 3.0 && o.brake > 0.2 && o.v < v) cap = Math.min(cap, Math.sqrt(o.v * o.v + 2 * 18 * Math.max(0, dd - 8)));
+        if (dd < 40 && ld < 3.0) close = true;
       }
     }
     if (wantOff === 0) ai.side = 0;
-    car.offsetTarget = wantOff;
-    car.offset += (car.offsetTarget - car.offset) * Math.min(1, dt * 1.6);
+    // w zakręcie (i przed nim) trzymaj się blisko linii: inny tor jazdy przy prędkości z profilu wynosi bolid z toru
+    var kAh = 0, nAh = Math.round((20 + v * 1.2) / T.ds);
+    for (var ka = 0; ka <= nAh; ka += 3) { var kk = Math.abs(L.k[(car.idx + ka) % N]); if (kk > kAh) kAh = kk; }
+    var offLim = kAh > 1 / 250 ? 1.5 : kAh > 1 / 600 ? 3 : 99;
+    car.offsetTarget = Math.max(-offLim, Math.min(offLim, wantOff));
+    car.offset += (car.offsetTarget - car.offset) * Math.min(1, dt * (offLim < 99 ? 3 : 1.6));
     var ti = (car.idx + look) % N;
     var off = Math.max(-T.hw + 2.2 - L.o[ti], Math.min(T.hw - 2.2 - L.o[ti], car.offset));
     var tx = L.x[ti] + T.nx[ti] * off, ty = L.y[ti] + T.ny[ti] * off;
@@ -445,35 +291,68 @@
     var ang = Math.atan2(dy, dx) - (car.h + (car.beta || 0));
     while (ang > Math.PI) ang -= 2 * Math.PI; while (ang < -Math.PI) ang += 2 * Math.PI;
     var curv = 2 * Math.sin(ang) / Math.max(dist, 4);
+    // blisko linii: śledzenie toru (krzywizna linii z wyprzedzeniem + korekta odchyłki bocznej i kursu);
+    // czyste pure pursuit ścina zmiany krzywizny i spóźnia obrót na wyjściach
+    var i0 = car.idx, ip = (i0 + 1) % N, im = (i0 + N - 1) % N;
+    var offN = Math.max(-T.hw + 2.2 - L.o[i0], Math.min(T.hw - 2.2 - L.o[i0], car.offset));
+    var ey = L.o[i0] + offN - car.lat;
+    var eh = Math.atan2(L.y[ip] - L.y[im], L.x[ip] - L.x[im]) - (car.h + (car.beta || 0));
+    while (eh > Math.PI) eh -= 2 * Math.PI; while (eh < -Math.PI) eh += 2 * Math.PI;
+    if (v > 6 && Math.abs(ey) < 3 && Math.abs(eh) < 0.35) {
+      var Lp = 7 + v * 0.22, iff = (i0 + Math.round((1 + v * 0.06) / T.ds)) % N;
+      var kff = (L.k[iff] + L.k[(iff + 1) % N] + L.k[(iff + N - 1) % N]) / 3;
+      var ctr = kff + ey / (Lp * Lp) + 1.6 * Math.sin(eh) / Lp;
+      var wB = Math.max(0, Math.min(1, (3 - Math.abs(ey)) / 1.5, (0.35 - Math.abs(eh)) / 0.15));
+      curv = ctr * wB + curv * (1 - wB);
+    }
     var maxCurv = car.maxCurv;
     if (!(maxCurv > 0)) {
-      var vs = Math.max(v, 3);
-      var gm0 = car.params.gripMul * PG.tyreGrip(car, env);
-      maxCurv = Math.min(1 / 6.5, (P.latA0 + P.latB * car.params.aeroMul * v * v) * gm0 / (vs * vs) * 1.14);
+      var vs = Math.max(v, 3), E0 = car.envC || (car.envC = PG.Veh.envelope({ power: car.params.power, cd: car.params.cd, gripMul: car.params.gripMul, aeroMul: car.params.aeroMul, brakeMul: car.params.brakeMul, setup: car.setup }));
+      maxCurv = Math.min(1 / 6.5, PG.Veh.envAt(E0.lat, v) * PG.tyreGrip(car, env) / (vs * vs));
     }
+    // AI podaje krzywiznę toru jako ułamek maxCurv; vehicle.js zamienia ją na kąt kół (regulator prędkości odchylania)
     car.steer = Math.max(-1, Math.min(1, curv / maxCurv));
     // prędkość docelowa z profilu
-    var pi = (car.idx + Math.round((4 + v * 0.12) / T.ds)) % N;
-    var target = car.profile.v[pi] * ai.pace;
-    // korekta za zużycie opon i warunki
-    target *= Math.sqrt(PG.tyreGrip(car, env) / ai.refGrip);
-    // brudne powietrze za rywalem: wolniej tylko w zakrętach
-    var dirty = car.dirty || 0;
-    if (dirty > 0.02) {
-      var gmT = car.params.gripMul * PG.tyreGrip(car, env);
-      var aerT = P.latB * car.params.aeroMul * target * target, capT = (P.latA0 + aerT) * gmT;
-      var use = capT > 0 ? Math.min(1, Math.abs(L.k[pi]) * target * target / capT) : 0;
-      if (use > 0.3) {
-        var lossF = Math.sqrt(Math.max(0.5, 1 - aerT * gmT * P.dirty * dirty / capT));
+    var PV = car.profile.v;
+    var pi = (car.idx + Math.round((2 + v * 0.05) / T.ds)) % N;
+    var target = PV[pi] * ai.pace;
+    // korekta za zużycie i temperaturę opon oraz warunki: w zakrętach i strefach hamowania (na prostej limitem jest moc)
+    var gr = PG.tyreGrip(car, env) / ai.refGrip * Math.min(1, car.gripT || 1);
+    if (Math.abs(L.k[pi]) > 1 / 900 || PV[(pi + 1) % N] < PV[pi] - 0.01 || gr > 1) target *= Math.sqrt(gr);
+    // brudne powietrze za rywalem: wolniej w zakrętach (przód traci więcej docisku)
+    var dirty = car.dirty || 0, E = car.envC, aero = 0;
+    if (E) { var aV = PG.Veh.envAt(E.lat, v); aero = aV > 0 ? Math.max(0, (aV - E.lat[0]) / aV) : 0; }
+    if (dirty > 0.02 && E) {
+      var aT = PG.Veh.envAt(E.lat, target), gT = PG.tyreGrip(car, env);
+      var use = aT > 0 ? Math.min(1, Math.abs(L.k[pi]) * target * target / (aT * gT * (ai.skill || 1))) : 0;
+      if (use > 0.3 && aT > 0) {
+        var aeroT = Math.max(0, (aT - E.lat[0]) / aT);
+        var lossF = Math.sqrt(Math.max(0.5, 1 - aeroT * P.dirtyF * dirty));
         target *= 1 - (1 - lossF) * (use - 0.3) / 0.7;
       }
     }
-    if (Math.abs(car.lat) > T.hw + 0.5) target = Math.min(target, 30);
+    // strefa hamowania: profil zakłada pełne hamowanie w czystym powietrzu na dobrych oponach; przy mniejszej
+    // skuteczności (brudne powietrze, zimne/zużyte opony, ciasno w stawce) hamuj wcześniej: v² = vmin² + f·(vp² − vmin²)
+    // daleko od linii (wyprzedzanie) trzeba jeszcze skręcić na hamowaniu: mniej siły na hamowanie
+    var dLn = Math.abs(car.lat - L.o[car.idx]);
+    var fB = Math.min(1, gr) * (1 - aero * 0.6 * dirty) * (close ? 0.93 : 1) * (dLn > 1 ? Math.max(0.8, 1 - 0.03 * (dLn - 1)) : 1);
+    if (fB < 0.995) {
+      var W = Math.min(260, Math.round(v * v / 24 / T.ds)), vmin = PV[pi];
+      for (var k = 1; k <= W; k++) { var pk = PV[(pi + k) % N]; if (pk < vmin) vmin = pk; }
+      var vp = PV[pi];
+      if (vmin < vp - 0.5) target = Math.min(target, Math.sqrt(vmin * vmin + fB * (vp * vp - vmin * vmin)) * ai.pace);
+    }
+    // poza linią po wewnętrznej (wyprzedzanie, obrona) promień jest mniejszy niż w profilu: v ~ √(1 − k·Δ)
+    var kdl = L.k[pi] * (car.lat - L.o[car.idx]);
+    if (kdl > 0) target *= Math.sqrt(Math.max(0.5, 1 - kdl));
+    // poza asfaltem: łagodnie zwalniaj (gwałtowne hamowanie na krawężniku w zakręcie kończy się obrotem)
+    var offT = Math.abs(car.lat) > T.hw + 0.5;
+    if (offT) target = Math.min(target, Math.max(30, v - 0.5));
     if (cap < target) target = cap;
     if (car.rcCap < target) target = car.rcCap; // samochód bezpieczeństwa / VSC
-    if (v < target - 0.3) { car.throttle = Math.min(1, (target - v) / 2.5 + 0.4); car.brake = 0; }
-    else if (v > target + 0.6) { car.throttle = 0; car.brake = Math.min(1, (v - target) / 4); }
-    else { car.throttle = 0.35; car.brake = 0; }
+    if (v < target - 0.2) { car.throttle = Math.min(1, (target - v) / 1.5 + 0.5); car.brake = 0; }
+    else if (v > target + 0.4) { car.throttle = 0; car.brake = Math.min(offT ? 0.35 : 1, (v - target) / 1.5); }
+    else { car.throttle = 0.4; car.brake = 0; }
     // DRS
     car.drsOpen = !!(car.drsAllowed && PG.inDRS(T, car.idx) && car.steer < 0.3 && car.steer > -0.3 && !(car.brake > 0.05));
   };
@@ -485,8 +364,8 @@
     car.dist += d * T.ds; car.idx = i;
     car.x = T.line.x[i]; car.y = T.line.y[i]; car.h = Math.atan2(T.ty[i], T.tx[i]); car.v = 8; car.steer = 0; car.steerIn = 0;
     car.offset = 0; car.stuck = 0; car.ghost = 2.5;
-    car.beta = 0; car.lock = 0; car.wspin = 0; car.axS = 0; car.revT = 0; car.aiLockT = 0;
-    car.mgear = 1; car.shiftT = 0;
+    car.beta = 0; car.lock = 0; car.wspin = 0; car.axS = 0; car.revT = 0;
+    car.mgear = 1; car.shiftT = 0; car.vsHard = true;
   };
 
   PG.inDRS = function (T, idx) {
