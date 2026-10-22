@@ -468,8 +468,9 @@
       bIn = Math.min(bIn, clamp(need * 1.06, 0.15, 1));
     }
     var Tb = bIn * q.Tbrk;
-    BTQ[0] = Tb * q.bias / 2 * bpF; BTQ[1] = BTQ[0];
-    BTQ[2] = Tb * (1 - q.bias) / 2 * bpR; BTQ[3] = BTQ[2];
+    var bias = q.bias + (car.bbAdj || 0) / 100; // pokrętło balansu w trakcie jazdy
+    BTQ[0] = Tb * bias / 2 * bpF; BTQ[1] = BTQ[0];
+    BTQ[2] = Tb * (1 - bias) / 2 * bpR; BTQ[3] = BTQ[2];
     car.absAct = 0;
     if (car.absOn && Tb > 0) {
       // ABS: limit momentu z modelu opony (κ ≈ 0,9 κp) + sprzężenie od rzeczywistego poślizgu koła

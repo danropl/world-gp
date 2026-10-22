@@ -73,7 +73,7 @@
       // model bolidu (vehicle.js): stan dynamiki, setup, pomoce gracza
       vs: null, vp: null, envC: null, setup: o.setup || null, setupKey: JSON.stringify(o.setup || null),
       delta: 0, gripT: 1, yawRate: 0, rollA: 0, pitchA: 0, tyreT0: null,
-      tcLvl: 2, sAssist: true, csAssist: false, stabOn: false, inWheel: false
+      tcLvl: 2, sAssist: true, csAssist: false, stabOn: false, inWheel: false, bbAdj: 0
     };
   };
   // Nowy setup bolidu (od razu w trakcie sesji)

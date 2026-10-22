@@ -12,7 +12,7 @@
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---------- USTAWIENIA: domyślne wartości nowych kluczy (career.js zostaje bez zmian) ----------
-  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto', engineSound: 'simple' };
+  var SET_DEF = { autoDrs: true, abs: false, tc: 2, steerAssist: 'auto', cs: false, stab: false, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto', engineSound: 'simple' };
   G.mergeSettings = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     if (!st) return;
@@ -23,20 +23,87 @@
     var g = +st.hapticsGain;
     st.hapticsGain = isFinite(g) ? Math.max(0, Math.min(1, g)) : 0.8;
     delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
-    st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
+    st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.haptics = !!st.haptics; st.post = !!st.post;
+    st.tc = PG.tcLevel ? PG.tcLevel(st.tc) : 2; // dawny przełącznik wł./wył. → poziom 0–3
+    st.cs = !!st.cs; st.stab = !!st.stab;
+    if (st.steerAssist !== 'on' && st.steerAssist !== 'off') st.steerAssist = 'auto';
+    if (!st.setups || typeof st.setups !== 'object') st.setups = {};
+    if (st.wheel && (typeof st.wheel !== 'object' || !st.wheel.steer)) st.wheel = null;
+    st.wheelRot = Math.max(180, Math.min(1080, Math.round(+st.wheelRot || 900)));
+    st.wheelLock = Math.max(180, Math.min(1080, Math.round(+st.wheelLock || 360)));
     if (st.gearbox !== 'manual') st.gearbox = 'auto';
     if (st.engineSound !== 'pack') st.engineSound = 'simple'; // dawny „V10” (synteza usunięta) → klasyczny
   };
   G.assistOpts = function () {
     var st = PG.Store.data.settings;
-    return { abs: !!st.abs, tc: st.tc !== false, autoDrs: st.autoDrs !== false, manual: st.gearbox === 'manual' };
+    return { abs: !!st.abs, tc: PG.tcLevel ? PG.tcLevel(st.tc) : 2, autoDrs: st.autoDrs !== false, manual: st.gearbox === 'manual', steer: st.steerAssist || 'auto', cs: !!st.cs, stab: !!st.stab };
+  };
+  // Zestawy asyst: łatwy (wszystko pomaga), standard (jak dotąd) i sim (bez pomocy, ręczna skrzynia)
+  G.ASSIST_PRESETS = {
+    easy: { abs: true, tc: 3, steerAssist: 'auto', cs: true, stab: true, autoDrs: true, gearbox: 'auto' },
+    std: { abs: false, tc: 2, steerAssist: 'auto', cs: false, stab: false, autoDrs: true, gearbox: 'auto' },
+    sim: { abs: false, tc: 0, steerAssist: 'off', cs: false, stab: false, autoDrs: false, gearbox: 'manual' }
+  };
+  G.applyAssistPreset = function (id) {
+    var pr = G.ASSIST_PRESETS[id], st = PG.Store.data.settings;
+    if (!pr) return;
+    Object.keys(pr).forEach(function (k) { st[k] = pr[k]; });
+    PG.Store.save(); G.syncAssists();
+  };
+  G.assistPreset = function () {
+    var st = PG.Store.data.settings, ids = Object.keys(G.ASSIST_PRESETS);
+    for (var i = 0; i < ids.length; i++) {
+      var pr = G.ASSIST_PRESETS[ids[i]], ok = true;
+      Object.keys(pr).forEach(function (k) { if (st[k] !== pr[k]) ok = false; });
+      if (ok) return ids[i];
+    }
+    return '';
+  };
+  // Setup bolidu gracza: osobny dla każdego toru (zapis w ustawieniach gry)
+  G.trackId = function () { return (G.T && G.T.def && G.T.def.id) || 'monza'; };
+  G.getSetup = function (track) {
+    var all = PG.Store.data.settings.setups || {}, s = all[track || G.trackId()];
+    return s ? PG.Veh.cleanSetup(s) : null;
+  };
+  G.saveSetup = function (setup, track) {
+    var st = PG.Store.data.settings;
+    if (!st.setups || typeof st.setups !== 'object') st.setups = {};
+    if (st.wheel && (typeof st.wheel !== 'object' || !st.wheel.steer)) st.wheel = null;
+    st.wheelRot = Math.max(180, Math.min(1080, Math.round(+st.wheelRot || 900)));
+    st.wheelLock = Math.max(180, Math.min(1080, Math.round(+st.wheelLock || 360)));
+    if (setup) st.setups[track || G.trackId()] = PG.Veh.cleanSetup(setup); else delete st.setups[track || G.trackId()];
+    PG.Store.save();
+    // w trakcie sesji: nowe ustawienia od razu w bolidzie gracza (dozwolone w kwalifikacjach, przed startem i w boksie)
+    var p = G.S && G.S.player;
+    if (p && !(track && track !== G.trackId())) { PG.setCarSetup(p, setup); p.bbAdj = 0; }
+  };
+  G.setupAllowed = function () {
+    var S = G.S, p = S && S.player;
+    if (!p || G.net) return false;
+    return S.mode !== 'race' || S.state === 'lights' || !!p.inPit;
+  };
+  // Poziom kontroli trakcji w trakcie jazdy: wył. → 1 → 2 → 3 → wył.
+  G.cycleTc = function () {
+    var S = G.S, st = PG.Store.data.settings;
+    if (!S || !S.player || G.spectate || G.net) return;
+    st.tc = (PG.tcLevel(st.tc) + 1) % 4; PG.Store.save(); G.syncAssists();
+    G.msg('', st.tc ? 'Kontrola trakcji: poziom ' + st.tc : 'Kontrola trakcji wyłączona', '', 1.1);
+  };
+  // Balans hamulców w trakcie jazdy (jak pokrętło na kierownicy): ±1 punkt procentowy
+  G.brakeBias = function (dir) {
+    var S = G.S, p = S && S.player;
+    if (!p || G.paused || G.spectate || !(G.mode === 'race' || G.mode === 'quali')) return;
+    var base = (p.setup ? p.setup.bias : PG.SETUP_DEF.bias), lim = PG.SETUP_LIM.bias;
+    var v = Math.max(lim[0], Math.min(lim[1], base + (p.bbAdj || 0) + dir));
+    p.bbAdj = v - base;
+    G.msg('', 'Balans hamulców: ' + v + '% przód', '', 1.1);
   };
   // Zmiana asyst w trakcie sesji (menu pauzy / ustawienia)
   G.syncAssists = function () {
     if (!G.S) return;
     var o = G.assistOpts(), a = G.S.assists;
     if (!a) a = G.S.assists = {};
-    a.abs = o.abs; a.tc = o.tc; a.autoDrs = o.autoDrs; a.manual = o.manual;
+    a.abs = o.abs; a.tc = o.tc; a.autoDrs = o.autoDrs; a.manual = o.manual; a.steer = o.steer; a.cs = o.cs; a.stab = o.stab;
     G.drsState = ''; // przerysuj znacznik AUTO
     G.applyGearbox();
   };
@@ -192,8 +259,16 @@
     PG.Audio.init();
     G.stopHaptics();
     var st = PG.Store.data.settings;
+    // setup gracza dla tego toru (jeśli zapisany)
+    var ents = (cfg.entries || []).map(function (e) {
+      if (!e || !e.isPlayer || e.remote || e.setup) return e;
+      var su = G.getSetup();
+      if (!su) return e;
+      var o = {}; Object.keys(e).forEach(function (k) { o[k] = e[k]; }); o.setup = su;
+      return o;
+    });
     G.S = PG.createSession({
-      track: G.T, entries: cfg.entries, mode: cfg.mode, laps: cfg.laps, weather: cfg.weather, difficulty: cfg.difficulty, autoPlayer: !!cfg.spectate,
+      track: G.T, entries: ents, mode: cfg.mode, laps: cfg.laps, weather: cfg.weather, difficulty: cfg.difficulty, autoPlayer: !!cfg.spectate,
       damage: cfg.damage || st.damage || 'full', assists: G.assistOpts(), wearMul: cfg.wearMul || 1, incidents: cfg.incidents || 'rare',
       netClient: !!cfg.netClient
     });
@@ -262,6 +337,9 @@
           else if (a === 'box' && !G.paused) G.toggleBox();
           else if (a === 'shiftUp') G.shift(1);
           else if (a === 'shiftDown') G.shift(-1);
+          else if (a === 'bbFwd') G.brakeBias(1);
+          else if (a === 'bbRear') G.brakeBias(-1);
+          else if (a === 'tcCycle' && !G.paused) G.cycleTc();
           else if (TYRE[a] && !G.paused) G.pickComp(TYRE[a]);
         }
       }
@@ -315,6 +393,20 @@
         if (PG.UI && PG.UI.onPadChange) { try { PG.UI.onPadChange(on, name); } catch (e) { /* nic */ } }
       };
     }
+    var W = PG.Wheel;
+    if (W) {
+      var wst = PG.Store.data.settings;
+      W.setCfg(wst.wheel || null); W.rot = wst.wheelRot; W.lock = wst.wheelLock;
+      W.onChange = function (on, name) {
+        if (on) G.note('Podłączono kierownicę: ' + name + (W.calibrated ? '' : ' · skalibruj ją w Ustawieniach → Kierownica i pedały'));
+        else {
+          var active = (G.mode === 'race' || G.mode === 'quali');
+          if (active && !G.paused && !G.netMenu && !G.spectate && G.S && G.S.player && G.S.player.inWheel) G.togglePause();
+          G.note('Odłączono kierownicę' + (name ? ': ' + name : ''));
+        }
+        if (PG.UI && PG.UI.onPadChange) { try { PG.UI.onPadChange(padConnected(), PG.Pad ? PG.Pad.name : ''); } catch (e) { /* nic */ } }
+      };
+    }
     if (PG.DualSenseHID) {
       PG.DualSenseHID.onChange = function (on) {
         if (on && G.S && G.S.player && G.S.player.team && G.S.player.team.livery) { try { PG.DualSenseHID.setLight(G.S.player.team.livery.primary); } catch (e) { /* nic */ } }
@@ -331,6 +423,12 @@
     try {
       P.poll();
       if (P.activity) G.focused = true;
+      // łopatki kierownicy (z kalibracji): biegi przy ręcznej skrzyni
+      var W = PG.Wheel;
+      if (W && W.active && active && !G.paused && !G.netMenu) {
+        if (W.hit('up')) G.shift(1);
+        if (W.hit('down')) G.shift(-1);
+      }
       if (!P.connected) return;
       if (active) {
         if (P.hit('pause')) { G.togglePause(); return; } // Options: pauza i wznowienie
@@ -354,7 +452,7 @@
 
   // Wejście do fizyki: klawiatura/dotyk + pad (jeden obiekt, bez alokacji co klatkę)
   var NOINPUT = {};
-  G.inp = { up: false, down: false, left: false, right: false, drs: false, steerAxis: null, throttleAxis: null, brakeAxis: null, analog: false };
+  G.inp = { up: false, down: false, left: false, right: false, drs: false, steerAxis: null, throttleAxis: null, brakeAxis: null, analog: false, wheel: false };
   G.readInput = function () {
     var I = G.input, o = G.inp, P = PG.Pad;
     o.up = !!I.up; o.down = !!I.down; o.left = !!I.left; o.right = !!I.right; o.drs = !!I.drs;
@@ -367,6 +465,12 @@
       if (P.held('dleft')) o.left = true;
       if (P.held('dright')) o.right = true;
       if (o.throttleAxis > 0.05 || o.brakeAxis > 0.05 || o.steerAxis > 0.1 || o.steerAxis < -0.1) G.padUsed = true;
+    }
+    // kierownica: steruje, gdy jej używano ostatnio (pad leżący obok jej nie wyłącza i odwrotnie)
+    var W = PG.Wheel;
+    o.wheel = false;
+    if (W && W.active && !G.padErr && (!(P && P.connected) || W.lastAct >= (P.lastAct || 0))) {
+      o.steerAxis = W.steer; o.throttleAxis = W.throttle; o.brakeAxis = W.brake; o.analog = true; o.wheel = true;
     }
     return o;
   };
@@ -682,7 +786,45 @@
       parts.forEach(function (el) { el._p = el.getAttribute('data-p'); el._q = -1; map[el._p] = el; });
       G.dmgW = { el: w, parts: parts, map: map, pct: $('dmgPct') };
     }
+    var tw = $('tyrew');
+    G.tyW = null;
+    if (tw) {
+      G.tyW = { el: tw, bb: $('tyBB'), bbK: '', cells: Array.prototype.slice.call(tw.querySelectorAll('.ty')).map(function (c) {
+        return { el: c, b: c.querySelector('b'), s: c.querySelector('s'), u: c.querySelector('u'), kT: NaN, kW: NaN, kB: NaN };
+      }) };
+    }
     G.rpmOn = -1; G.drsState = ''; G.drsSt = '';
+  };
+  // Kolor temperatury: d = odchyłka od okna opony w jego szerokościach (−2 zimna … 0 idealna … +2 przegrzana)
+  function heatCol(d) {
+    var P = [[-2, [74, 163, 255]], [-0.6, [47, 208, 122]], [0.6, [47, 208, 122]], [1.4, [255, 201, 60]], [2.4, [225, 6, 0]]];
+    if (d <= P[0][0]) d = P[0][0];
+    if (d >= P[4][0]) d = P[4][0];
+    for (var i = 1; i < P.length; i++) {
+      if (d <= P[i][0]) {
+        var a = P[i - 1], b = P[i], k = (d - a[0]) / (b[0] - a[0]);
+        return 'rgb(' + Math.round(a[1][0] + (b[1][0] - a[1][0]) * k) + ',' + Math.round(a[1][1] + (b[1][1] - a[1][1]) * k) + ',' + Math.round(a[1][2] + (b[1][2] - a[1][2]) * k) + ')';
+      }
+    }
+    return 'rgb(225,6,0)';
+  }
+  G.updateTyres = function (S, p) {
+    var w = G.tyW;
+    if (!w) return;
+    var Ts = p.tyreTs, Tc = p.tyreTc, Wr = p.tyreW, Tb = p.brakeT, show = !!(Ts && Tc && Wr);
+    if (w.el.hidden === show) w.el.hidden = !show;
+    if (!show) return;
+    var tp = PG.TYRES[p.compound] || PG.TYRES.M, opt = tp.tOpt || 100, tw = tp.tW || 20;
+    for (var i = 0; i < 4; i++) {
+      var c = w.cells[i], te = 0.6 * Ts[i] + 0.4 * Tc[i], kT = Math.round(te), kW = Math.round((1 - Wr[i]) * 50);
+      if (kT !== c.kT) { c.kT = kT; c.el.style.backgroundColor = heatCol((te - opt) / tw); c.b.textContent = String(Math.round(Ts[i])); }
+      if (kW !== c.kW) { c.kW = kW; c.s.style.width = kW * 2 + '%'; }
+      // tarcza: zimna < 300 °C (słabiej hamuje), 400–1000 w oknie, powyżej przegrzana
+      var tb = Tb ? Tb[i < 2 ? 0 : 1] : 500, kB = Math.round(tb / 20);
+      if (kB !== c.kB) { c.kB = kB; c.u.style.backgroundColor = heatCol(tb < 400 ? (tb - 400) / 125 : tb > 1000 ? (tb - 1000) / 150 + 0.6 : 0); }
+    }
+    var bb = (p.setup ? p.setup.bias : PG.SETUP_DEF.bias) + (p.bbAdj || 0), key = 'BB ' + bb + '%';
+    if (key !== w.bbK) { w.bbK = key; w.bb.textContent = key; }
   };
   G.resetHud = function () {
     var H = G.hud;
@@ -778,6 +920,7 @@
       if (H.rcb.className !== rcls) H.rcb.className = rcls;
     }
     G.updateDmg(S, p);
+    G.updateTyres(S, p);
     // czasy okrążeń
     var cur = p.started ? S.time - p.lapStart : 0;
     setHTML(H.laps, '<span>Okrążenie</span><span class="num">' + PG.fmtTime(cur) + '</span>' +

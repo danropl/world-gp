@@ -1,7 +1,7 @@
 <!doctype html><html lang=pl><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>WORLD GP</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="fonts/fonts.css?v=2026.10.18.13">
+<link rel="stylesheet" href="fonts/fonts.css?v=2026.10.22.1">
 <style>
 /* Układ: pełnoekranowy canvas gry w wysokiej rozdzielczości, nad nim panele w stylu grafiki telewizyjnej wyścigów. */
 :root {
@@ -285,6 +285,20 @@ kbd { font-family: var(--font-ui); font-size: 14px; font-weight: 700; border: 1p
 @keyframes drsOpen { 0% { transform: translateY(7px) scale(0.9); background: #ffffff; box-shadow: 0 0 0 0 rgba(255,255,255,0.9); } 35% { transform: translateY(-2px) scale(1.14); box-shadow: 0 0 20px 5px rgba(47,208,122,0.85); } 100% { transform: none; box-shadow: 0 0 9px rgba(47,208,122,0.5); } }
 @keyframes drsSheen { from { left: -60%; } to { left: 130%; } }
 @keyframes drsClose { from { background: rgba(47,208,122,0.65); color: #062014; } to { background: rgba(47,208,122,0); } }
+/* Widżet opon: temperatura (niebieska zimna → zielona w oknie → czerwona przegrzana), zużycie (pasek), tarcze hamulców */
+#tyrew { background: var(--glass-hud); border: 1px solid var(--line-soft); border-radius: 6px; padding: 7px 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+#tyrew[hidden] { display: none; }
+#tyrew .tg { display: grid; grid-template-columns: 30px 30px; grid-template-rows: 40px 46px; column-gap: 16px; row-gap: 8px; }
+#tyrew .ty { position: relative; border-radius: 6px; background: #3b4552; display: flex; align-items: center; justify-content: center; padding-bottom: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.45); transition: background-color 400ms; }
+#tyrew .ty b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: #0b0f14; }
+#tyrew .ty i { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; background: rgba(0,0,0,0.4); border-radius: 2px; overflow: hidden; }
+#tyrew .ty s { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: #f4f6f8; }
+#tyrew .ty u { position: absolute; top: 28%; bottom: 28%; width: 4px; border-radius: 2px; background: #3b4552; transition: background-color 400ms; }
+#tyrew .ty[data-t="0"] u, #tyrew .ty[data-t="2"] u { right: -9px; }
+#tyrew .ty[data-t="1"] u, #tyrew .ty[data-t="3"] u { left: -9px; }
+#tyrew .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted); font-family: var(--font-num); white-space: nowrap; }
+#tyrew .lbl b { color: var(--ink); font-weight: 700; }
+@media (max-width: 760px) { #tyrew { display: none !important; } }
 /* Widżet uszkodzeń: bolid z góry, części od zielonego do czerwonego */
 #dmgw { background: var(--glass-hud); border: 1px solid var(--line-soft); border-radius: 6px; padding: 7px 8px 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
 #dmgw[hidden] { display: none; }
@@ -401,6 +415,15 @@ canvas.car3d { border-radius: 6px; }
     <canvas id="minimap"></canvas>
     <div id="laps"></div>
     <div id="br">
+      <div id="tyrew" hidden aria-label="Opony: temperatura i zużycie">
+        <div class="tg">
+          <div class="ty" data-t="0"><b></b><i><s></s></i><u></u></div>
+          <div class="ty" data-t="1"><b></b><i><s></s></i><u></u></div>
+          <div class="ty" data-t="2"><b></b><i><s></s></i><u></u></div>
+          <div class="ty" data-t="3"><b></b><i><s></s></i><u></u></div>
+        </div>
+        <div class="lbl">OPONY <b id="tyBB"></b></div>
+      </div>
       <div id="dmgw" hidden aria-label="Stan bolidu">
         <svg viewBox="0 0 64 120" aria-hidden="true">
           <rect class="pt" data-p="fwL" x="3" y="4" width="28" height="9" rx="2"/>
@@ -444,32 +467,32 @@ canvas.car3d { border-radius: 6px; }
   <div id="ui"></div>
 </div>
 
-<script src="js/vendor/three.min.js?v=2026.10.18.13"></script>
-<script src="js/data.js?v=2026.10.18.13"></script>
-<script src="js/keys.js?v=2026.10.18.13"></script>
-<script src="js/track.js?v=2026.10.18.13"></script>
-<script src="js/physics.js?v=2026.10.18.13"></script>
-<script src="js/vehicle.js?v=2026.10.18.13"></script>
-<script src="js/session.js?v=2026.10.18.13"></script>
-<script src="js/quali.js?v=2026.10.18.13"></script>
-<script src="js/pit.js?v=2026.10.18.13"></script>
-<script src="js/racecontrol.js?v=2026.10.18.13"></script>
-<script src="js/sprites.js?v=2026.10.18.13"></script>
-<script src="js/render.js?v=2026.10.18.13"></script>
-<script src="js/engines.js?v=2026.10.18.13"></script>
-<script src="js/enginepack.js?v=2026.10.18.13"></script>
-<script src="js/audio.js?v=2026.10.18.13"></script>
-<script src="js/career.js?v=2026.10.18.13"></script>
-<script src="js/car3d.js?v=2026.10.18.13"></script>
-<script src="js/cockpit3d.js?v=2026.10.18.13"></script>
-<script src="js/trees3d.js?v=2026.10.18.13"></script>
-<script src="js/world3d-lite.js?v=2026.10.18.13"></script>
-<script src="js/post3d.js?v=2026.10.18.13"></script>
-<script src="js/view3d.js?v=2026.10.18.13"></script>
-<script src="js/input.js?v=2026.10.18.13"></script>
-<script src="js/game.js?v=2026.10.18.13"></script>
-<script src="js/ui.js?v=2026.10.18.13"></script>
-<script src="js/net.js?v=2026.10.18.13"></script>
-<script src="js/multi.js?v=2026.10.18.13"></script>
+<script src="js/vendor/three.min.js?v=2026.10.22.1"></script>
+<script src="js/data.js?v=2026.10.22.1"></script>
+<script src="js/keys.js?v=2026.10.22.1"></script>
+<script src="js/track.js?v=2026.10.22.1"></script>
+<script src="js/physics.js?v=2026.10.22.1"></script>
+<script src="js/vehicle.js?v=2026.10.22.1"></script>
+<script src="js/session.js?v=2026.10.22.1"></script>
+<script src="js/quali.js?v=2026.10.22.1"></script>
+<script src="js/pit.js?v=2026.10.22.1"></script>
+<script src="js/racecontrol.js?v=2026.10.22.1"></script>
+<script src="js/sprites.js?v=2026.10.22.1"></script>
+<script src="js/render.js?v=2026.10.22.1"></script>
+<script src="js/engines.js?v=2026.10.22.1"></script>
+<script src="js/enginepack.js?v=2026.10.22.1"></script>
+<script src="js/audio.js?v=2026.10.22.1"></script>
+<script src="js/career.js?v=2026.10.22.1"></script>
+<script src="js/car3d.js?v=2026.10.22.1"></script>
+<script src="js/cockpit3d.js?v=2026.10.22.1"></script>
+<script src="js/trees3d.js?v=2026.10.22.1"></script>
+<script src="js/world3d-lite.js?v=2026.10.22.1"></script>
+<script src="js/post3d.js?v=2026.10.22.1"></script>
+<script src="js/view3d.js?v=2026.10.22.1"></script>
+<script src="js/input.js?v=2026.10.22.1"></script>
+<script src="js/game.js?v=2026.10.22.1"></script>
+<script src="js/ui.js?v=2026.10.22.1"></script>
+<script src="js/net.js?v=2026.10.22.1"></script>
+<script src="js/multi.js?v=2026.10.22.1"></script>
 
 </body></html>

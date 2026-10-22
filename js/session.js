@@ -243,7 +243,7 @@
     c.analogIn = !!inp.analog && !inp.down;
     c.throttle = c.thrIn;
     c.brake = c.brkIn;
-    if (c.brake > 0.1 && c.v > 0.5) c.throttle = 0;
+    if (c.brake > 0.1 && c.v > 0.5 && !inp.wheel) c.throttle = 0; // na pedałach wolno hamować lewą nogą z gazem
     // chęć cofania: wciśnięty hamulec bez gazu
     c.wantRev = !!((inp.down || bA > 0.3) && !inp.up && tA <= 0.02);
     // DRS: otwarty zostaje do hamowania lub końca strefy; automat otwiera sam

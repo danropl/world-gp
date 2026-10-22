@@ -78,12 +78,14 @@
   Pad.poll = function () {
     var list = null, gi = -1, i, g;
     if (navigator.getGamepads) { try { list = navigator.getGamepads(); } catch (e) { list = null; } }
+    // kierownice i pedały mają własny odczyt (osie z kalibracji) i nie są padem
+    try { Wheel.poll(list); } catch (e) { Wheel.active = false; }
     if (list) {
       // zostań przy obecnym padzie; inny pad przejmuje sterowanie, gdy ktoś na nim wciśnie przycisk
-      if (Pad.index >= 0 && Pad.index < list.length && list[Pad.index] && list[Pad.index].connected) gi = Pad.index;
+      if (Pad.index >= 0 && Pad.index < list.length && list[Pad.index] && list[Pad.index].connected && !Wheel.claims(list[Pad.index])) gi = Pad.index;
       for (i = 0; i < list.length; i++) {
         g = list[i];
-        if (!g || !g.connected || i === gi) continue;
+        if (!g || !g.connected || i === gi || Wheel.claims(g)) continue;
         if (gi < 0 || anyPressed(g)) { gi = i; if (Pad.index >= 0) break; }
       }
     }
@@ -116,6 +118,7 @@
     Pad.throttle = trig(r2); Pad.brake = trig(l2);
     if (Pad.throttle > 0.05 || Pad.brake > 0.05 || (x > 0.3 || x < -0.3) || (y > 0.3 || y < -0.3)) act = true;
     Pad.activity = act;
+    if (act) Pad.lastAct = now();
     if (fresh) notify(true, Pad.name);
     // nawigacja w menu: zbocze, potem powtarzanie przy przytrzymaniu
     var dir = (Pad.down[B.up] || y < -0.6) ? 'up' : (Pad.down[B.down] || y > 0.6) ? 'down' :
@@ -151,6 +154,93 @@
     return false;
   };
   Pad.BUTTONS = B;
+
+  // =====================================================================
+  // KIEROWNICA I PEDAŁY
+  // =====================================================================
+  // Kierownice mają w Gamepad API układ niestandardowy (osie i przyciski zależą od modelu, systemu
+  // i przeglądarki), dlatego osie bierzemy z kalibracji. Bez niej: skręt na osi 0, pedały zgadnięte
+  // z osi, które w spoczynku stoją na końcu zakresu. Pedały mogą być osobnym urządzeniem USB.
+  var WHEEL_NAME = /wheel|kierownic|\bg2[579]\b|\bg9(20|23)\b|driving force|thrustmaster|fanatec|moza|simucube|simagic|cammus|asetek|pedal/i;
+  var WHEEL_ID = /046d[^0-9a-f]{1,12}(c24f|c260|c261|c262|c266|c267|c26d|c26e|c294|c298|c299|c29a|c29b|c2a0)|\b(044f|0eb7|346e|16d0)\b/i;
+  function isWheelId(id) { var t = String(id || ''); return WHEEL_NAME.test(t) || WHEEL_ID.test(t); }
+  var Wheel = PG.Wheel = {
+    active: false, calibrated: false, name: '', id: '',
+    steer: 0, throttle: 0, brake: 0, lastAct: 0,
+    rot: 900, lock: 360, // obrót ustawiony w sterowniku i obrót odpowiadający pełnemu skrętowi bolidu (stopnie)
+    cfg: null,      // { steer: {dev, axis, inv, center}, thr: {dev, axis, rest, full}, brk: {…}, up: {dev, btn}, down: {dev, btn} }
+    guess: {},      // id urządzenia → { thr, brk } zgadnięte przy pierwszym odczycie
+    btn: { up: 0, down: 0 }, prevBtn: { up: 0, down: 0 },
+    list: null,     // ostatnia lista urządzeń (kalibracja)
+    onChange: null
+  };
+  Wheel.isWheel = isWheelId;
+  function devById(list, id) {
+    if (!list || !id) return null;
+    for (var i = 0; i < list.length; i++) { var g = list[i]; if (g && g.connected && g.id === id) return g; }
+    return null;
+  }
+  function usesDev(c, id) { return !!(c && id && ((c.steer && c.steer.dev === id) || (c.thr && c.thr.dev === id) || (c.brk && c.brk.dev === id))); }
+  // Urządzenie należy do kierownicy (nie traktuj go jak pada)
+  Wheel.claims = function (g) { return !!g && (isWheelId(g.id) || usesDev(Wheel.cfg, g.id)); };
+  Wheel.setCfg = function (c) { Wheel.cfg = c && c.steer ? c : null; };
+  function pedal(list, b) {
+    if (!b) return 0;
+    var g = devById(list, b.dev);
+    if (!g || !g.axes) return 0;
+    var span = b.full - b.rest;
+    if (!(span > 0.2 || span < -0.2)) return 0;
+    var t = ((num(g.axes[b.axis], b.rest) - b.rest) / span - 0.03) / 0.94; // martwa strefa na obu końcach skoku
+    return t > 0 ? (t < 1 ? t : 1) : 0;
+  }
+  function guessPedals(g) {
+    var ax = g.axes || [], out = [], i;
+    for (i = 1; i < ax.length && out.length < 2; i++) { var v = num(ax[i], 0); if (v > 0.9 || v < -0.9) out.push({ dev: g.id, axis: i, rest: v > 0 ? 1 : -1, full: v > 0 ? -1 : 1 }); }
+    return { thr: out[0] || null, brk: out[1] || null };
+  }
+  function btnDown(list, b) {
+    var g = b && devById(list, b.dev), x = g && g.buttons ? g.buttons[b.btn] : null;
+    return x && (x.pressed || num(x.value, 0) > 0.5) ? 1 : 0;
+  }
+  Wheel.poll = function (list) {
+    Wheel.list = list;
+    var c = Wheel.cfg, sd = c && c.steer ? devById(list, c.steer.dev) : null, i;
+    if (!sd && list) for (i = 0; i < list.length; i++) { var g = list[i]; if (g && g.connected && isWheelId(g.id) && !/pedal/i.test(g.id)) { sd = g; break; } }
+    Wheel.prevBtn.up = Wheel.btn.up; Wheel.prevBtn.down = Wheel.btn.down;
+    if (!sd) {
+      if (Wheel.active) { Wheel.active = false; Wheel.steer = 0; Wheel.throttle = 0; Wheel.brake = 0; if (Wheel.onChange) { try { Wheel.onChange(false, Wheel.name); } catch (e) { /* nic */ } } }
+      Wheel.btn.up = 0; Wheel.btn.down = 0;
+      return;
+    }
+    var fresh = !Wheel.active || Wheel.id !== sd.id;
+    var cal = !!(c && c.steer && c.steer.dev === sd.id), ax = sd.axes || [];
+    if (!cal && !Wheel.guess[sd.id]) Wheel.guess[sd.id] = guessPedals(sd);
+    var gs = cal ? null : Wheel.guess[sd.id];
+    // skręt: obrót w sterowniku (rot) → pełne wychylenie bolidu przy kącie lock (bolid F1 ok. 360° od oporu do oporu)
+    var raw = num(ax[cal ? c.steer.axis : 0], 0) - (cal ? num(c.steer.center, 0) : 0);
+    if (cal && c.steer.inv) raw = -raw;
+    var rot = clamp(num(Wheel.rot, 900), 180, 1080), lock = clamp(num(Wheel.lock, 360), 180, 1080);
+    Wheel.steer = clamp(raw * rot / lock, -1, 1);
+    Wheel.throttle = pedal(list, cal ? c.thr : gs.thr);
+    Wheel.brake = pedal(list, cal ? c.brk : gs.brk);
+    Wheel.btn.up = cal ? btnDown(list, c.up) : 0; Wheel.btn.down = cal ? btnDown(list, c.down) : 0;
+    if (Wheel.throttle > 0.05 || Wheel.brake > 0.05 || Wheel.steer > 0.04 || Wheel.steer < -0.04 || Wheel.btn.up || Wheel.btn.down) Wheel.lastAct = now();
+    Wheel.active = true; Wheel.calibrated = cal; Wheel.id = sd.id; Wheel.name = padName(sd.id);
+    if (fresh && Wheel.onChange) { try { Wheel.onChange(true, Wheel.name); } catch (e2) { /* nic */ } }
+  };
+  Wheel.hit = function (k) { return !!(Wheel.btn[k] && !Wheel.prevBtn[k]); };
+  // Odczyt surowy (kalibracja): wszystkie osie i przyciski wszystkich urządzeń
+  Wheel.snapshot = function () {
+    var list = null, out = [];
+    if (navigator.getGamepads) { try { list = navigator.getGamepads(); } catch (e) { list = null; } }
+    for (var i = 0; list && i < list.length; i++) {
+      var g = list[i];
+      if (!g || !g.connected) continue;
+      out.push({ id: g.id, name: padName(g.id), axes: Array.prototype.map.call(g.axes || [], function (v) { return num(v, 0); }),
+        buttons: Array.prototype.map.call(g.buttons || [], function (b) { return b && (b.pressed || num(b.value, 0) > 0.5) ? 1 : 0; }) });
+    }
+    return out;
+  };
 
   // Zdarzenia przeglądarki (część przeglądarek udostępnia pady dopiero po ich nasłuchu)
   try {
