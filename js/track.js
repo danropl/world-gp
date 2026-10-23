@@ -206,10 +206,10 @@
     }
     var span = wrapI(P.exit - P.entry, N), i, k, t;
     for (k = 0; k <= span; k++) { i = wrapI(P.entry + k, N); t = tAt(i); A[i] = edgeA(t); B[i] = edgeB(t); }
-    // odbojnica: tam, gdzie klin między torem a drogą mieści mur (lico muru 1,2 m przed drogą, ≥ 1 m od krawędzi toru)
+    // odbojnica: tam, gdzie malowany klin między torem a drogą ma ok. 3,4 m (lico muru 1,2 m przed drogą, 2,2 m od krawędzi toru)
     var noseIn = P.entry, noseOut = P.exit;
-    for (k = 0; k <= nIn; k++) { i = wrapI(P.entry + k, N); if (A[i] - 1.2 >= hw + 1) { noseIn = i; break; } }
-    for (k = 0; k <= nOut; k++) { i = wrapI(P.exit - k, N); if (A[i] - 1.2 >= hw + 1) { noseOut = i; break; } }
+    for (k = 0; k <= nIn; k++) { i = wrapI(P.entry + k, N); if (A[i] - 1.2 >= hw + 2.2) { noseIn = i; break; } }
+    for (k = 0; k <= nOut; k++) { i = wrapI(P.exit - k, N); if (A[i] - 1.2 >= hw + 2.2) { noseOut = i; break; } }
     P.noseIn = noseIn; P.noseOut = noseOut;
     // klin przed odbojnicą to asfalt (ciągła nawierzchnia od krawędzi toru), oddzielony od drogi alei białą linią:
     // pitL — linia (dawna wewnętrzna krawędź drogi), pitA — wewnętrzna krawędź asfaltu (pod krawędzią toru)

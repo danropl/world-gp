@@ -1409,6 +1409,38 @@
         });
       }
     }
+    // klin między torem a drogą alei (przed odbojnicami): na zjeździe białe ukośne pasy, na wyjeździe czerwono-białe
+    // szewrony wzdłuż obu krawędzi klina, zbiegające się w jego wierzchołku (track.js: T.pitL, P.noseIn / P.noseOut)
+    safe('klin alei', function () {
+      var P = T.pit; if (!T.pitL || P.noseIn === undefined) return;
+      var RED = lin(0xd3262b), UV = [0, 0, 1, 0, 1, 1, 0, 1], Y = 0.012;
+      function L(fi) { var i = wrapI(Math.floor(fi), N), j = wrapI(i + 1, N), f = fi - Math.floor(fi); return T.pitL[i] + (T.pitL[j] - T.pitL[i]) * f; }
+      function Pf(fi, lat) {
+        var i = wrapI(Math.floor(fi), N), j = wrapI(i + 1, N), f = fi - Math.floor(fi);
+        var x = T.x[i] + (T.x[j] - T.x[i]) * f, z = T.y[i] + (T.y[j] - T.y[i]) * f, nx = T.nx[i] + (T.nx[j] - T.nx[i]) * f, nz = T.ny[i] + (T.ny[j] - T.ny[i]) * f;
+        return [x + nx * lat, Y, z + nz * lat];
+      }
+      var a = hw - 0.15;                                   // za linią krawędzi toru
+      function b(fi) { return L(fi) + 0.25; }               // przed linią drogi alei
+      function quad(p0, p1, p2, p3, col) { bat('paint', p0[0], p0[2]).rect(p0, p1, p2, p3, 0, 1, 0, UV, col); }
+      // zjazd: ukośne pasy co 2,4 m (szer. 0,55 m), od krawędzi toru do linii alei
+      var e0 = P.entry, nIn = wrapI(P.noseIn - e0, N), sw = 0.55 / ds;
+      for (var s = 0; s < nIn; s += 2.4 / ds) {
+        var fi = e0 + s, d = (b(fi) - a) / ds;
+        if (b(fi) - a < 0.7) continue;
+        if (s + d + sw > nIn - 0.6) break;
+        quad(Pf(fi, a), Pf(fi + sw, a), Pf(fi + sw + d, b(fi + sw + d)), Pf(fi + d, b(fi + d)), WHITE);
+      }
+      // wyjazd: czerwono-białe szewrony (pasy po 1 m) z ostrzem w stronę wierzchołka klina, czyli w kierunku jazdy
+      var x0 = P.noseOut, nOut = wrapI(P.exit - x0, N), cw = 1 / ds;
+      for (var s2 = 0, n = 0; s2 < nOut; s2 += cw, n++) {
+        var f0 = x0 + s2, h = (b(f0) - a) / 2 / ds;
+        if (h * ds < 0.3 || s2 + h + cw > nOut) break;
+        var m0 = (a + b(f0 + h)) / 2, m1 = (a + b(f0 + h + cw)) / 2, col = n % 2 ? WHITE : RED;
+        quad(Pf(f0, a), Pf(f0 + cw, a), Pf(f0 + h + cw, m1), Pf(f0 + h, m0), col);
+        quad(Pf(f0, b(f0)), Pf(f0 + cw, b(f0 + cw)), Pf(f0 + h + cw, m1), Pf(f0 + h, m0), col);
+      }
+    });
     safe('budynki', function () {
       scen.forEach(function (o) {
         if (!o || !o.pts || o.pts.length < 3) return;
