@@ -1143,7 +1143,7 @@
       ['top', 'Przełożenia: V na 8. biegu', 'km/h', 'Krótsze: lepsze przyspieszenie, ale ogranicznik obrotów wcześniej na długiej prostej.']]]
   ];
   var SETUP_PRESETS = [
-    ['low', 'Mały docisk', { fw: 3, rw: 2, top: 372 }],
+    ['low', 'Mały docisk', { fw: 2, rw: 2, top: 372 }],
     ['def', 'Zrównoważony', {}],
     ['high', 'Duży docisk', { fw: 9, rw: 10, top: 345 }],
     ['wet', 'Deszcz', { fw: 10, rw: 11, top: 340, sprF: 4, sprR: 4, arbF: 4, arbR: 3, rhF: 7, rhR: 8, diffP: 30, diffC: 20, bias: 56, press: 5 }]
