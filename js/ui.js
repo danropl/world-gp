@@ -1050,12 +1050,11 @@
     var side = h('div', { class: 'panel col' });
     side.appendChild(h('div', { class: 'row' }, h('span', { class: 'big-pos', text: 'P' + myPos }), h('div', { class: 'col', style: 'gap:2px' }, h('b', { text: 'Twoje pole startowe' }), h('span', { class: 'muted', text: playerTime ? 'Twoje okrążenie: ' + PG.fmtTime(playerTime) : raceLen(ctx.laps) }))));
     var comp = ctx.weather === 'rain' ? 'W' : 'M';
-    side.appendChild(h('h3', { text: 'Opony na start' }));
     var tyreOpts = ctx.weather === 'rain' ? [['W', 'Deszczowe'], ['M', 'Pośrednie (slick)']] : [['S', 'Miękkie'], ['M', 'Pośrednie'], ['H', 'Twarde'], ['W', 'Deszczowe']];
-    side.appendChild(seg(tyreOpts, comp, function (v) { comp = v; }));
     var rule = ctx.weather !== 'rain' && ctx.laps >= 10;
-    side.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Miękkie trzymają najlepiej, ale szybko się zużywają. Twarde wytrzymają długo. W deszczu slicki tracą przyczepność.' +
-      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1 albo Create, przy ręcznej skrzyni Create), opony 1–4 (pad: krzyżak ▲▼). Bez zgłoszenia też możesz skręcić w zjazd przed murem alei, ale postój potrwa dłużej.' }));
+    var tyreNote = 'Miękkie trzymają najlepiej, ale szybko się zużywają. Twarde wytrzymają długo. W deszczu slicki tracą przyczepność.' +
+      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1 albo Create, przy ręcznej skrzyni Create), opony 1–4 (pad: krzyżak ▲▼). Bez zgłoszenia też możesz skręcić w zjazd przed murem alei, ale postój potrwa dłużej.';
+    side.appendChild(note('Przed startem ustawisz jeszcze bolid (skrzydła, zawieszenie, dyferencjał, hamulce, ciśnienie opon, przełożenia) i wybierzesz opony.'));
     function go(spectate) {
       root.innerHTML = '';
       var entries = times.map(function (x) {
@@ -1067,10 +1066,15 @@
         UI.results(ctx, out, myPos);
       });
     }
-    var meE = ctx.entries.find(function (e) { return e.isPlayer; });
-    side.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'primary', text: 'Start wyścigu', onclick: function () { go(false); } }),
-      h('button', { type: 'button', text: 'Symuluj wyścig', onclick: function () { go(true); } }),
-      meE ? h('button', { type: 'button', text: 'Setup bolidu', onclick: function () { UI.setupOverlay({ team: meE.team, driver: meE.driver, wet: ctx.weather === 'rain' }); } }) : null));
+    var meE = ctx.entries.find(function (e) { return e.isPlayer; }), pendSu = null;
+    // ekran przed startem; „wstecz” wraca do tych samych pól startowych (bez ponownego losowania czasów)
+    function preRace() {
+      UI.preRace({ ctx: ctx, entry: meE, pos: myPos, comp: comp, su: pendSu, tyreOpts: tyreOpts, tyreNote: tyreNote,
+        onStart: function (c) { comp = c; go(false); },
+        onBack: function (su, c) { pendSu = su; comp = c; runCleanups(); root.innerHTML = ''; s.classList.remove('enter'); lastScreen = 'grid'; root.appendChild(s); } });
+    }
+    side.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'primary', text: meE ? 'Przygotuj bolid →' : 'Start wyścigu', onclick: function () { if (meE) preRace(); else go(false); } }),
+      h('button', { type: 'button', text: 'Symuluj wyścig', onclick: function () { go(true); } })));
     g2.appendChild(side);
     w.appendChild(g2); s.appendChild(w);
   };
@@ -1165,67 +1169,108 @@
   // tor do statystyk setupu: bieżący albo zbudowany raz dla innego wybranego toru
   var statTracks = {};
   function statTrack(td) { return G.T && G.T.def === td ? G.T : statTracks[td.id] || (statTracks[td.id] = PG.buildTrack(td)); }
+  // Edytor setupu wspólny dla okna „Setup bolidu” i ekranu przed startem.
+  // o: { team, driver, wet }; init: setup na start (domyślnie zapisany dla toru); zwraca suwaki, zestawy, szacunek osiągów i bieżący setup
+  function setupEditor(o, track, init) {
+    var td = trackDef(track), saved = G.getSetup(track), sT = statTrack(td), base = null;
+    var ed = { td: td, saved: saved, su: PG.Veh.cleanSetup(init || saved || PG.SETUP_DEF), sliders: h('div', { class: 'col' }), presets: h('div', { class: 'row' }), stats: h('div', { class: 'kv' }) };
+    var inputs = {}, tmr = 0;
+    function upStats() {
+      var x = setupStats(o, ed.su, sT);
+      if (!base) base = setupStats(o, PG.Veh.cleanSetup(PG.SETUP_DEF), sT);
+      var d = x.lap - base.lap;
+      ed.stats.innerHTML = '';
+      [['Prędkość maks.', Math.round(x.vmax) + ' km/h'], ['Przyczepność 150 km/h', x.lat1.toFixed(2) + ' g'], ['Przyczepność 250 km/h', x.lat2.toFixed(2) + ' g'],
+        ['Hamowanie z 250 km/h', x.brk.toFixed(2) + ' g'], ['Docisk na przodzie', Math.round(x.aeroF * 100) + '%'],
+        ['Idealne okrążenie', PG.fmtTime(x.lap) + (Math.abs(d) >= 0.005 ? ' (' + (d > 0 ? '+' : '−') + Math.abs(d).toFixed(2).replace('.', ',') + ' s)' : '')]].forEach(function (r) {
+        ed.stats.appendChild(h('span', { class: 'muted', text: r[0] })); ed.stats.appendChild(h('b', { class: 'num', text: r[1] }));
+      });
+    }
+    function changed() { ed.dirty = true; clearTimeout(tmr); tmr = setTimeout(upStats, 120); }
+    ed.setAll = function (vals) {
+      ed.su = PG.Veh.cleanSetup(vals);
+      Object.keys(inputs).forEach(function (k) { inputs[k].r.value = ed.su[k]; inputs[k].r.dispatchEvent(new Event('input', { bubbles: true })); });
+    };
+    SETUP_ROWS.forEach(function (grp) {
+      ed.sliders.appendChild(h('h3', { text: grp[0] }));
+      grp[1].forEach(function (row) {
+        var k = row[0], lim = PG.SETUP_LIM[k], out = h('b', { class: 'num', style: 'min-width:64px;text-align:right', text: ed.su[k] + (row[2] ? ' ' + row[2] : '') });
+        var r = h('input', { type: 'range', min: lim[0], max: lim[1], step: k === 'pre' ? 10 : k === 'top' ? 2 : 1, value: ed.su[k], 'aria-label': row[1], oninput: function () {
+          ed.su[k] = +r.value; out.textContent = r.value + (row[2] ? ' ' + row[2] : ''); changed();
+        } });
+        inputs[k] = { r: r };
+        ed.sliders.appendChild(h('label', { class: 'field' }, row[1], h('div', { class: 'row', style: 'flex-wrap:nowrap' }, r, out)));
+        if (row[3]) ed.sliders.appendChild(note(row[3]));
+      });
+    });
+    SETUP_PRESETS.forEach(function (x) {
+      ed.presets.appendChild(h('button', { type: 'button', class: 'small', text: x[1], onclick: function () { var v = {}; Object.keys(PG.SETUP_DEF).forEach(function (k) { v[k] = x[2][k] !== undefined ? x[2][k] : PG.SETUP_DEF[k]; }); ed.setAll(v); } }));
+    });
+    ed.statsNote = note('Wyliczone z modelu bolidu na ' + (o.wet ? 'oponach deszczowych' : 'oponach pośrednich') + ', bez temperatur i zużycia. „Idealne okrążenie” pokazuje różnicę względem ustawień domyślnych; na torze liczy się też, jak bolid się prowadzi.');
+    ed.dirty = !!init;
+    upStats();
+    return ed;
+  }
   // opts: { team, driver, wet, live (zmiana w trakcie sesji), track (inny niż obecny), onClose }
   UI.setupOverlay = function (o) {
     var old = document.getElementById('setupov');
     if (old) old.remove();
-    var track = o.track || (G.trackId ? G.trackId() : 'monza'), td = trackDef(track);
-    var saved = G.getSetup(track), su = PG.Veh.cleanSetup(saved || PG.SETUP_DEF), base = null, sT = statTrack(td);
+    var track = o.track || (G.trackId ? G.trackId() : 'monza'), ed = setupEditor(o, track), td = ed.td;
     var ov = h('div', { class: 'screen solid', id: 'setupov', style: 'background:rgba(14,26,31,0.9);z-index:30;overflow:auto' });
     var w = h('div', { class: 'wrap', style: 'max-width:1060px' });
     var close = function () { ov.remove(); if (o.onClose) o.onClose(); if (o.live && PG.Pad && PG.Pad.connected) { var r = document.querySelector('#pause button.primary'); if (r) UI.padFocus(r); } };
     w.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', { text: 'Setup bolidu · ' + td.name }),
       h('button', { type: 'button', text: 'Zamknij', 'data-back': true, onclick: close })));
-    var g2 = h('div', { class: 'grid2' }), left = h('div', { class: 'panel col' }), right = h('div', { class: 'panel col' });
-    var inputs = {}, stats = h('div', { class: 'kv' });
-    function upStats() {
-      var x = setupStats(o, su, sT);
-      if (!base) base = setupStats(o, PG.Veh.cleanSetup(PG.SETUP_DEF), sT);
-      var d = x.lap - base.lap;
-      stats.innerHTML = '';
-      [['Prędkość maks.', Math.round(x.vmax) + ' km/h'], ['Przyczepność 150 km/h', x.lat1.toFixed(2) + ' g'], ['Przyczepność 250 km/h', x.lat2.toFixed(2) + ' g'],
-        ['Hamowanie z 250 km/h', x.brk.toFixed(2) + ' g'], ['Docisk na przodzie', Math.round(x.aeroF * 100) + '%'],
-        ['Idealne okrążenie', PG.fmtTime(x.lap) + (Math.abs(d) >= 0.005 ? ' (' + (d > 0 ? '+' : '−') + Math.abs(d).toFixed(2).replace('.', ',') + ' s)' : '')]].forEach(function (r) {
-        stats.appendChild(h('span', { class: 'muted', text: r[0] })); stats.appendChild(h('b', { class: 'num', text: r[1] }));
-      });
-    }
-    var tmr = 0;
-    function changed() { clearTimeout(tmr); tmr = setTimeout(upStats, 120); }
-    function setAll(vals) {
-      su = PG.Veh.cleanSetup(vals);
-      Object.keys(inputs).forEach(function (k) { inputs[k].r.value = su[k]; inputs[k].r.dispatchEvent(new Event('input', { bubbles: true })); });
-    }
-    SETUP_ROWS.forEach(function (grp) {
-      left.appendChild(h('h3', { text: grp[0] }));
-      grp[1].forEach(function (row) {
-        var k = row[0], lim = PG.SETUP_LIM[k], out = h('b', { class: 'num', style: 'min-width:64px;text-align:right', text: su[k] + (row[2] ? ' ' + row[2] : '') });
-        var r = h('input', { type: 'range', min: lim[0], max: lim[1], step: k === 'pre' ? 10 : k === 'top' ? 2 : 1, value: su[k], 'aria-label': row[1], oninput: function () {
-          su[k] = +r.value; out.textContent = r.value + (row[2] ? ' ' + row[2] : ''); changed();
-        } });
-        inputs[k] = { r: r };
-        left.appendChild(h('label', { class: 'field' }, row[1], h('div', { class: 'row', style: 'flex-wrap:nowrap' }, r, out)));
-        if (row[3]) left.appendChild(note(row[3]));
-      });
-    });
+    var g2 = h('div', { class: 'grid2' }), left = h('div', { class: 'panel col' }, ed.sliders), right = h('div', { class: 'panel col' });
     right.appendChild(h('h3', { text: 'Zestawy' }));
-    var pr = h('div', { class: 'row' });
-    SETUP_PRESETS.forEach(function (x) {
-      pr.appendChild(h('button', { type: 'button', class: 'small', text: x[1], onclick: function () { var v = {}; Object.keys(PG.SETUP_DEF).forEach(function (k) { v[k] = x[2][k] !== undefined ? x[2][k] : PG.SETUP_DEF[k]; }); setAll(v); } }));
-    });
-    right.appendChild(pr);
+    right.appendChild(ed.presets);
     right.appendChild(h('h3', { text: 'Szacunek osiągów', style: 'margin-top:6px' }));
-    right.appendChild(stats);
-    right.appendChild(note('Wyliczone z modelu bolidu na ' + (o.wet ? 'oponach deszczowych' : 'oponach pośrednich') + ', bez temperatur i zużycia. „Idealne okrążenie” pokazuje różnicę względem ustawień domyślnych; na torze liczy się też, jak bolid się prowadzi.'));
+    right.appendChild(ed.stats);
+    right.appendChild(ed.statsNote);
     right.appendChild(note('Setup zapisuje się osobno dla każdego toru i działa w szybkim wyścigu, karierze i multiplayerze. ' + (o.live ? 'W trakcie sesji zmiana działa od razu (w kwalifikacjach, przed startem albo w boksie).' : '')));
     right.appendChild(h('div', { class: 'row' },
-      h('button', { type: 'button', class: 'primary', text: 'Zapisz', onclick: function () { G.saveSetup(su, track); UI.toast('Setup zapisany · ' + td.name); close(); } }),
-      h('button', { type: 'button', text: 'Domyślny', onclick: function () { setAll(PG.SETUP_DEF); } }),
-      saved ? h('button', { type: 'button', class: 'small', text: 'Usuń zapisany', onclick: function () { G.saveSetup(null, track); UI.toast('Przywrócono setup domyślny'); close(); } }) : null));
+      h('button', { type: 'button', class: 'primary', text: 'Zapisz', onclick: function () { G.saveSetup(ed.su, track); UI.toast('Setup zapisany · ' + td.name); close(); } }),
+      h('button', { type: 'button', text: 'Domyślny', onclick: function () { ed.setAll(PG.SETUP_DEF); } }),
+      ed.saved ? h('button', { type: 'button', class: 'small', text: 'Usuń zapisany', onclick: function () { G.saveSetup(null, track); UI.toast('Przywrócono setup domyślny'); close(); } }) : null));
     g2.appendChild(left); g2.appendChild(right);
     w.appendChild(g2); ov.appendChild(w);
     root.appendChild(ov);
-    upStats();
     if (PG.Pad && PG.Pad.connected) { var f = ov.querySelector('input'); if (f) UI.padFocus(f); }
+  };
+
+  // ---------- PRZED STARTEM: setup bolidu i opony tuż przed wyścigiem ----------
+  // o: { ctx, entry (gracz), pos, comp, su (niezapisany setup z poprzedniej wizyty), tyreOpts, tyreNote, onStart(comp), onBack(su, comp) }
+  UI.preRace = function (o) {
+    var ctx = o.ctx, track = (G.trackId && G.trackId()) || ctx.track || 'monza', comp = o.comp;
+    var ed = setupEditor({ team: o.entry.team, driver: o.entry.driver, wet: ctx.weather === 'rain' }, track, o.su), td = ed.td;
+    var s = screen('prerace', 'dim'), w = h('div', { class: 'wrap', style: 'max-width:1100px' });
+    w.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' },
+      h('div', { class: 'row', style: 'gap:14px;flex-wrap:nowrap' }, h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Pola startowe', title: 'Pola startowe', text: '←', 'data-back': true, onclick: function () { o.onBack(ed.dirty ? ed.su : null, comp); } }),
+        h('div', { class: 'col', style: 'gap:0' }, h('small', { class: 'muted', text: ctx.title || 'Wyścig' }), h('h2', { text: 'Przed startem · ' + td.name }))),
+      h('span', { class: 'pill', text: 'Start z P' + o.pos + ' · ' + PG.WEATHER[ctx.weather].name + ' · ' + raceLen(ctx.laps, td).split(' · ')[0] })));
+    var g2 = h('div', { class: 'split-aside' });
+    var left = h('div', { class: 'panel col' }, h('h3', { text: 'Setup bolidu' }), note('Ustaw bolid pod ' + td.name + (ctx.weather === 'rain' ? ' w deszczu' : '') + '. Setup zapisze się dla tego toru, gdy ruszysz na start.'), ed.sliders);
+    var right = h('div', { class: 'panel col aside' });
+    right.appendChild(h('h3', { text: 'Opony na start' }));
+    right.appendChild(seg(o.tyreOpts, comp, function (v) { comp = v; }));
+    right.appendChild(note(o.tyreNote));
+    right.appendChild(h('h3', { text: 'Zestawy' }));
+    right.appendChild(ed.presets);
+    right.appendChild(h('div', { class: 'row' },
+      h('button', { type: 'button', class: 'small', text: 'Domyślny', onclick: function () { ed.setAll(PG.SETUP_DEF); } }),
+      ed.saved ? h('button', { type: 'button', class: 'small', text: 'Zapisany', onclick: function () { ed.setAll(ed.saved); } }) : null));
+    right.appendChild(h('h3', { text: 'Szacunek osiągów', style: 'margin-top:6px' }));
+    right.appendChild(ed.stats);
+    right.appendChild(ed.statsNote);
+    right.appendChild(h('div', { class: 'cta-bar' }, h('span', { class: 'muted', text: 'P' + o.pos + ' · ' + ({ S: 'miękkie', M: 'pośrednie', H: 'twarde', W: 'deszczowe' })[comp] }),
+      h('button', { type: 'button', class: 'primary big', text: 'Start wyścigu →', onclick: function () {
+        if (ed.dirty || ed.saved) G.saveSetup(ed.su, track);
+        o.onStart(comp);
+      } })));
+    // podpis w pasku startu nadąża za wyborem opon
+    right.querySelector('.seg').addEventListener('click', function () { right.querySelector('.cta-bar .muted').textContent = 'P' + o.pos + ' · ' + ({ S: 'miękkie', M: 'pośrednie', H: 'twarde', W: 'deszczowe' })[comp]; });
+    g2.appendChild(left); g2.appendChild(right); w.appendChild(g2); s.appendChild(w);
+    if (PG.Pad && PG.Pad.connected) { var f = right.querySelector('button.primary'); if (f) UI.padFocus(f); }
   };
 
   // ---------- PAUZA ----------
