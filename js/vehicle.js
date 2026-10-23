@@ -9,7 +9,7 @@
   var VEH = PG.VEH = {
     m: 640, L: 3.05, a: 1.65, b: 1.40, tF: 1.46, tR: 1.40, h: 0.29, Iz: 950,
     R: 0.33, IwF: 0.9, IwR: 1.2, Ie: 0.04, eff: 0.92, crr: 0.012,
-    rho: 1.225, ClA: 3.4, CdA: 1.15, aeroF: 0.43,
+    rho: 1.225, ClA: 3.4, CdA: 1.15, aeroF: 0.41,
     hrcF: 0.03, hrcR: 0.06, Iroll: 60, Ipitch: 450,
     KphiF: 195e3, KphiR: 160e3, Kth: 2.5e6, KhF: 600e3, KhR: 520e3,
     Tbrk: 11000, lock: 0.28, mu0: 1.74, fz0: 3000,
@@ -348,8 +348,9 @@
     var apF = tp.apF / q.kB;
     if (human) {
       if (car.sAssist) {
-        // asysta: pełne wychylenie = szczyt przedniej opony przy tej prędkości (+20 % zapasu)
-        var dmax = Math.min(V.lock, 1.2 * apF + V.L * aLat / (vxs * vxs));
+        // asysta: pełne wychylenie = granica przyczepności przy tej prędkości (skręt geometryczny + połowa kąta
+        // szczytu przedniej opony); więcej skrętu nic nie daje w zakręcie, a w zygzaku obraca bolid
+        var dmax = Math.min(V.lock, 0.6 * apF + V.L * aLat / (vxs * vxs));
         dl = st * dmax;
       } else dl = st * V.lock;
       // pomoc kontry łapie mały uślizg tyłu (najwyżej ok. 7° na kołach), ale nie trzyma bolidu bokiem na gazie:
@@ -431,7 +432,9 @@
     var limiter = !slipClutch && rpmW >= V.rpmMax;
     var Te = 0;
     if (reversing) Te = 0;
-    else if (thr > 0 && !limiter && s.shiftT <= 0) Te = torque(rpm) * q.tq * dp.pw * thr;
+    // gracz: progresywna mapa pedału jak w bolidach F1 (moment ~ gaz^1,6): częściowy gaz daje się dozować bez
+    // kontroli trakcji, pełny gaz bez zmian
+    else if (thr > 0 && !limiter && s.shiftT <= 0) Te = torque(rpm) * q.tq * dp.pw * (human && thr < 1 ? Math.pow(thr, 1.6) : thr);
     else if (!slipClutch && vWr > 4) Te = -(15 + 45 * (rpm / V.rpmMax) * (rpm / V.rpmMax)) * (1 - thr);
     if (s.shiftT > 0) s.shiftT -= dt;
     var Tin = Te * GR * (Te > 0 ? V.eff : 1);
